@@ -1,0 +1,8 @@
+[package]
+name = "qlc"
+version = "0.1.0"
+authors = ["Eric Butler <eric.butler@notarize.com>"]
+edition = "2018"
+
+[dependencies]
+crossbeam-channel = "0.3.8"
