@@ -1,3 +1,4 @@
+use super::graphql::Schema;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -11,6 +12,7 @@ enum Message {
 
 struct Worker {
     threads: usize,
+    schema: Arc<Schema>,
     is_waiting: bool,
     is_quitting: bool,
     num_waiting: Arc<AtomicUsize>,
@@ -22,7 +24,7 @@ struct Worker {
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            for new_work in work.run() {
+            for new_work in work.run(&self.schema) {
                 self.tx.send(Message::Work(new_work)).unwrap();
             }
         }
@@ -101,11 +103,15 @@ impl Worker {
 
 pub struct WorkerPool {
     num_workers: usize,
+    schema: Arc<Schema>,
 }
 
 impl WorkerPool {
-    pub fn new(num_workers: usize) -> WorkerPool {
-        WorkerPool { num_workers }
+    pub fn new(num_workers: usize, schema: Schema) -> Self {
+        WorkerPool {
+            num_workers,
+            schema: Arc::new(schema),
+        }
     }
 
     pub fn work(&self, initial_work: super::work::Work) {
@@ -117,6 +123,7 @@ impl WorkerPool {
         for _ in 0..threads {
             let worker = Worker {
                 threads,
+                schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
                 is_quitting: false,

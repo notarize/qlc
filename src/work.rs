@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Work {
@@ -26,7 +27,7 @@ impl Work {
         Ok(more_work)
     }
 
-    pub fn run(&self) -> Vec<Work> {
+    pub fn run(&self, schema: &Arc<super::graphql::Schema>) -> Vec<Work> {
         match self {
             Work::DirEntry(path) => self.run_dir_entry(path).unwrap_or_else(|_| vec![]),
             Work::GraphQL(path) => {
