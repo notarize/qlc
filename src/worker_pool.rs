@@ -1,5 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -7,46 +5,8 @@ use std::time::Duration;
 
 #[derive(Debug)]
 enum Message {
-    Work(Work),
+    Work(super::work::Work),
     Quit,
-}
-
-#[derive(Debug)]
-enum Work {
-    GraphQl(PathBuf),
-    DirEntry(PathBuf),
-}
-
-impl Work {
-    fn run_dir_entry(&self, path: &PathBuf, tx: &channel::Sender<Message>) {
-        fs::read_dir(path).and_then(|readdir| {
-            for raw_entry in readdir {
-                let entry = match raw_entry {
-                    Ok(entry) => entry,
-                    Err(e) => return Err(e),
-                };
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-                let new_work = Work::DirEntry(path);
-                tx.send(Message::Work(new_work)).unwrap();
-            }
-            Ok(())
-        });
-    }
-
-    fn run(&self, tx: &channel::Sender<Message>) {
-        match self {
-            Work::DirEntry(ref path) => {
-                dbg!(path);
-                self.run_dir_entry(path, tx);
-            }
-            Work::GraphQl(path) => {
-                dbg!(path);
-            }
-        }
-    }
 }
 
 struct Worker {
@@ -62,11 +22,13 @@ struct Worker {
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            work.run(&self.tx);
+            for new_work in work.run() {
+                self.tx.send(Message::Work(new_work)).unwrap();
+            }
         }
     }
 
-    fn pop_work(&mut self) -> Option<Work> {
+    fn pop_work(&mut self) -> Option<super::work::Work> {
         loop {
             match self.rx.try_recv() {
                 Ok(Message::Work(work)) => {
@@ -146,10 +108,10 @@ impl WorkerPool {
         WorkerPool { num_workers }
     }
 
-    pub fn work(&self) {
+    pub fn work(&self, initial_work: super::work::Work) {
         let threads = self.num_workers;
         let (tx, rx) = channel::unbounded();
-        let num_waiting = Arc::new(AtomicUsize::new(threads));
+        let num_waiting = Arc::new(AtomicUsize::new(0));
         let num_quitting = Arc::new(AtomicUsize::new(0));
         let mut handles = vec![];
         for _ in 0..threads {
@@ -158,14 +120,14 @@ impl WorkerPool {
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
                 is_quitting: false,
-                is_waiting: true,
+                is_waiting: false,
                 tx: tx.clone(),
                 rx: rx.clone(),
             };
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
         }
-        let root = Message::Work(Work::DirEntry(PathBuf::from(r".")));
+        let root = Message::Work(initial_work);
         tx.send(root).unwrap();
         drop(tx);
         drop(rx);
