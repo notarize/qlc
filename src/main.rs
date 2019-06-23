@@ -1,4 +1,5 @@
 extern crate crossbeam_channel as channel;
+extern crate graphql_parser;
 extern crate serde_json;
 use std::path::PathBuf;
 mod graphql;

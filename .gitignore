@@ -1,2 +1,3 @@
+/tests/**/__generated__
 /target
 **/*.rs.bk

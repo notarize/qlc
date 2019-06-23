@@ -1,0 +1,13 @@
+query MeetingQuery($meetingId: ID!) {
+  viewer {
+    user {
+      id
+      firstName: first_name
+      lastName: last_name
+    }
+  }
+  meeting: node(id: $meetingId) {
+    id
+    canComplete: can_complete
+  }
+}

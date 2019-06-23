@@ -1,4 +1,4 @@
-use super::graphql::Schema;
+use super::graphql::schema::Schema;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
