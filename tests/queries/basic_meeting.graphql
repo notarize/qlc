@@ -8,6 +8,17 @@ query MeetingQuery($meetingId: ID!) {
   }
   meeting: node(id: $meetingId) {
     id
-    canComplete: can_complete
+    ... on Meeting {
+      canComplete: can_complete
+      documentBundle: document_bundle {
+        documents {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
   }
 }

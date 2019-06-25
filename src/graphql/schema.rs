@@ -13,13 +13,9 @@ pub enum Error {
 }
 
 #[derive(Debug)]
-pub struct FieldMetaData {
-    pub nullable: bool,
-}
-
-#[derive(Debug)]
 pub enum ScalarType {
     Custom(String),
+    Null,
     Boolean,
     String,
     Float,
@@ -41,42 +37,71 @@ impl ScalarType {
 }
 
 #[derive(Debug)]
-pub struct InterfaceType {
-    pub possible_types: Vec<String>,
+pub struct FieldType {
+    pub nullable: bool,
+    pub definition: FieldTypeDefintion,
 }
 
 #[derive(Debug)]
-pub enum FieldType {
-    List(FieldMetaData, Box<FieldType>),
-    Object(FieldMetaData, String),
-    Enum(FieldMetaData, EnumType),
-    Scalar(FieldMetaData, ScalarType),
+pub enum FieldTypeDefintion {
+    List(Box<FieldType>),
+    Object(String),
+    Interface(String),
+    Enum(EnumType),
+    Scalar(ScalarType),
 }
 
 impl FieldType {
     fn from(json: FieldSubtypeJSON) -> Result<Self, Error> {
-        let mut metadata = FieldMetaData { nullable: true };
+        let mut nullable = true;
         let mut iter = json;
         loop {
             match iter.kind.as_ref() {
                 "NON_NULL" => {
-                    metadata.nullable = false;
+                    nullable = false;
                     iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForNonNull)?;
                 }
                 "LIST" => {
                     iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForList)?;
                     let field_type = FieldType::from(iter)?;
-                    return Ok(FieldType::List(metadata, Box::new(field_type)));
+                    let definition = FieldTypeDefintion::List(Box::new(field_type));
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
                 }
-                "OBJECT" | "INTERFACE" => {
+                "OBJECT" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    return Ok(FieldType::Object(metadata, name));
+                    let definition = FieldTypeDefintion::Object(name);
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
                 }
                 "SCALAR" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    return Ok(FieldType::Scalar(metadata, ScalarType::from(&name)));
+                    let definition = FieldTypeDefintion::Scalar(ScalarType::from(&name));
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
                 }
-                _ => return Ok(FieldType::Scalar(metadata, ScalarType::Boolean)), // TODO
+                "INTERFACE" => {
+                    let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
+                    let definition = FieldTypeDefintion::Interface(name);
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
+                }
+                _ => {
+                    // TODO
+                    let definition = FieldTypeDefintion::Scalar(ScalarType::Boolean);
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
+                }
             }
         }
     }
@@ -111,23 +136,28 @@ pub struct EnumType {
 }
 
 #[derive(Debug)]
-pub struct TypeMetaData {
-    pub description: Option<String>,
+pub struct InterfaceType {
+    pub name: String,
+    pub fields: HashMap<String, Field>,
 }
 
 #[derive(Debug)]
-pub enum Type {
-    Object(TypeMetaData, ObjectType),
-    Enum(TypeMetaData, EnumType),
-    Scalar(TypeMetaData, String),
+pub enum TypeDefintion {
+    Object(ObjectType),
+    Enum(EnumType),
+    Scalar(String),
+    Interface(InterfaceType),
+}
+
+#[derive(Debug)]
+pub struct Type {
+    pub description: Option<String>,
+    pub definition: TypeDefintion,
 }
 
 impl Type {
     fn from(json: TypeJSON) -> Result<Self, Error> {
-        let metadata = TypeMetaData {
-            description: json.description,
-        };
-        match json.kind.as_ref() {
+        let definition = match json.kind.as_ref() {
             "OBJECT" => {
                 let fields_json = json.fields.unwrap_or_else(Vec::new);
                 let mut fields = HashMap::with_capacity(fields_json.len());
@@ -135,7 +165,7 @@ impl Type {
                     fields.insert(field_json.name.clone(), Field::from(field_json));
                 }
                 let object_type = ObjectType { fields };
-                Ok(Type::Object(metadata, object_type))
+                TypeDefintion::Object(object_type)
             }
             "ENUM" => {
                 let name = &json.name;
@@ -146,13 +176,29 @@ impl Type {
                     .map(|v| v.name.clone())
                     .collect();
                 let enum_type = EnumType { possible_values };
-                Ok(Type::Enum(metadata, enum_type))
+                TypeDefintion::Enum(enum_type)
             }
-            "SCALAR" => Ok(Type::Scalar(metadata, json.name)),
+            "SCALAR" => TypeDefintion::Scalar(json.name),
+            "INTERFACE" => {
+                let fields_json = json.fields.unwrap_or_else(Vec::new);
+                let mut fields = HashMap::with_capacity(fields_json.len());
+                for field_json in fields_json {
+                    fields.insert(field_json.name.clone(), Field::from(field_json));
+                }
+                let interface_type = InterfaceType {
+                    name: json.name,
+                    fields,
+                };
+                TypeDefintion::Interface(interface_type)
+            }
             // TODO
-            "INPUT_OBJECT" | "UNION" | "INTERFACE" => Ok(Type::Scalar(metadata, json.name)),
-            _ => Err(Error::UnknownTypeKind(json.name, json.kind)),
-        }
+            "INPUT_OBJECT" | "UNION" => TypeDefintion::Scalar(json.name),
+            _ => return Err(Error::UnknownTypeKind(json.name, json.kind)),
+        };
+        Ok(Type {
+            description: json.description,
+            definition,
+        })
     }
 }
 
