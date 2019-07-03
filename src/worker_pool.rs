@@ -1,12 +1,15 @@
 use super::graphql::schema::Schema;
+use super::work::{compile_global_file, Work};
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 #[derive(Debug)]
 enum Message {
-    Work(super::work::Work),
+    Work(Work),
     Quit,
 }
 
@@ -15,6 +18,7 @@ struct Worker {
     schema: Arc<Schema>,
     is_waiting: bool,
     is_quitting: bool,
+    global_types: Arc<Mutex<HashSet<String>>>,
     num_waiting: Arc<AtomicUsize>,
     num_quitting: Arc<AtomicUsize>,
     tx: channel::Sender<Message>,
@@ -24,8 +28,17 @@ struct Worker {
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            for new_work in work.run(&self.schema) {
-                self.tx.send(Message::Work(new_work)).unwrap();
+            let (new_work, used_globals) = work.run(&self.schema);
+            if let Some(works) = new_work {
+                for work in works {
+                    self.tx.send(Message::Work(work)).unwrap();
+                }
+            }
+            if let Some(globals) = used_globals {
+                let mut self_globals = self.global_types.lock().unwrap();
+                for global in globals {
+                    self_globals.insert(global);
+                }
             }
         }
     }
@@ -114,8 +127,9 @@ impl WorkerPool {
         }
     }
 
-    pub fn work(&self, initial_work: super::work::Work) {
+    pub fn work(&self, root_dir: PathBuf) {
         let threads = self.num_workers;
+        let global_types = Arc::new(Mutex::new(HashSet::new()));
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicUsize::new(0));
         let num_quitting = Arc::new(AtomicUsize::new(0));
@@ -126,6 +140,7 @@ impl WorkerPool {
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
+                global_types: global_types.clone(),
                 is_quitting: false,
                 is_waiting: false,
                 tx: tx.clone(),
@@ -134,6 +149,7 @@ impl WorkerPool {
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
         }
+        let initial_work = Work::DirEntry(root_dir.clone());
         let root = Message::Work(initial_work);
         tx.send(root).unwrap();
         drop(tx);
@@ -141,5 +157,8 @@ impl WorkerPool {
         for handle in handles {
             handle.join().unwrap();
         }
+
+        let global_types = global_types.lock().unwrap();
+        compile_global_file(&root_dir, &self.schema, &global_types);
     }
 }

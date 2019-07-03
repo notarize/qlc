@@ -1,4 +1,5 @@
 use schema::Schema;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
@@ -36,7 +37,15 @@ fn makedir_p(path: &PathBuf) -> Result<(), Error> {
     }
 }
 
-pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<(), Error> {
+fn make_generated_dir(path: &PathBuf) -> Result<PathBuf, Error> {
+    let mut generated_dir_path = path.clone();
+    generated_dir_path.pop();
+    generated_dir_path.push("__generated__");
+    makedir_p(&generated_dir_path)?;
+    Ok(generated_dir_path)
+}
+
+pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
     let parsed = graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
 
@@ -44,13 +53,24 @@ pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<(), Error> {
         return Err(Error::OnlyOneOperationPerDocumentSupported);
     }
 
-    let mut generated_dir_path = path.clone();
-    generated_dir_path.pop();
-    generated_dir_path.push("__generated__");
-    makedir_p(&generated_dir_path)?;
+    let mut generated_dir_path = make_generated_dir(path)?;
 
-    let (filename, file_contents) =
+    let the_compile =
         super::typescript::compile(&parsed.definitions[0], schema).map_err(Error::CompileError)?;
-    generated_dir_path.push(filename);;
-    std::fs::write(&generated_dir_path, file_contents).map_err(Error::FileError)
+    generated_dir_path.push(the_compile.filename);
+    std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
+    Ok(the_compile.used_global_types)
+}
+
+pub fn compile_global_types_file(
+    path: &PathBuf,
+    schema: &Schema,
+    global_names: &HashSet<String>,
+) -> Result<(), Error> {
+    let mut generated_dir_path = make_generated_dir(path)?;
+    let the_compile =
+        super::typescript::compile_globals(schema, global_names).map_err(Error::CompileError)?;
+    generated_dir_path.push(the_compile.filename);
+    std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
+    Ok(())
 }

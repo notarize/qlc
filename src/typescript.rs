@@ -1,21 +1,32 @@
 use super::graphql::schema::*;
 use graphql_parser::query;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub enum Error {
     UnknownError,
     MissingType(String),
+    NotEnumGlobal(String),
     UnknownField(String),
-    SelectionSetOnScalar(String),
+    SelectionSetOnWrongType(String),
     MissingTypeCondition,
 }
 
 type Result<T> = std::result::Result<T, Error>;
 
+pub struct GlobalTypesCompile {
+    pub filename: String,
+    pub contents: String,
+}
+
+pub struct Compile {
+    pub filename: String,
+    pub contents: String,
+    pub used_global_types: HashSet<String>,
+}
+
 fn from_schema_field_scalar(scalar: &ScalarType) -> String {
     match scalar {
-        ScalarType::Null => String::from("null"),
         ScalarType::Boolean => String::from("boolean"),
         ScalarType::String | ScalarType::ID => String::from("string"),
         ScalarType::Float | ScalarType::Int => String::from("number"),
@@ -23,7 +34,7 @@ fn from_schema_field_scalar(scalar: &ScalarType) -> String {
     }
 }
 
-fn from_field_description(description: &Option<String>) -> String {
+fn from_field_description(description: &Option<String>, tab_width: &str) -> String {
     match description {
         Some(desc) => {
             let processed_desc = desc
@@ -31,40 +42,45 @@ fn from_field_description(description: &Option<String>) -> String {
                 .map(|line| line.trim())
                 .filter(|line| !line.is_empty())
                 .collect::<Vec<&str>>()
-                .join("\n   * ")
+                .join(&format!("\n {}* ", tab_width))
                 .replace("*/", "");
-            format!("/**\n   * {}\n   */\n  ", processed_desc)
+            format!(
+                "/**\n {}* {}\n {}*/\n{}",
+                tab_width, processed_desc, tab_width, tab_width
+            )
         }
         None => String::from(""),
     }
 }
 
 fn from_schema_field_type<F>(
+    ctx: &mut CompileContext,
     field_type: &FieldType,
     parent_name: &str,
     field_name: &str,
     mut add_another_type: F,
 ) -> Result<String>
 where
-    F: FnMut(&str, &str) -> Result<()>,
+    F: FnMut(&mut CompileContext, &str, &str) -> Result<()>,
 {
     let output = match &field_type.definition {
         FieldTypeDefintion::List(sub_field) => {
             let inner_str =
-                from_schema_field_type(&sub_field, parent_name, field_name, add_another_type)?;
+                from_schema_field_type(ctx, &sub_field, parent_name, field_name, add_another_type)?;
             format!("({})[]", inner_str)
         }
         FieldTypeDefintion::Enum(enum_type) => {
-            return Err(Error::UnknownError);
+            ctx.add_type(enum_type);
+            enum_type.to_string()
         }
         FieldTypeDefintion::Object(name) => {
             let object_name = format!("{}_{}", parent_name, field_name);
-            add_another_type(name, &object_name)?;
+            add_another_type(ctx, name, &object_name)?;
             object_name
         }
         FieldTypeDefintion::Interface(name) => {
             let object_name = format!("{}_{}", parent_name, field_name);
-            add_another_type(name, &object_name)?;
+            add_another_type(ctx, name, &object_name)?;
             object_name
         }
         FieldTypeDefintion::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
@@ -76,13 +92,14 @@ where
 }
 
 fn from_field_of_product<F>(
+    ctx: &mut CompileContext,
     query_field: &query::Field,
     fields: &HashMap<String, Field>,
     parent_name: &str,
     add_another_type: F,
 ) -> Result<String>
 where
-    F: FnMut(&str, &str) -> Result<()>,
+    F: FnMut(&mut CompileContext, &str, &str) -> Result<()>,
 {
     let field_name = &query_field.name;
     let user_spec_field_name = query_field
@@ -93,12 +110,13 @@ where
         .get(field_name)
         .ok_or_else(|| Error::UnknownField(query_field.name.clone()))?;
     let field_value = from_schema_field_type(
+        ctx,
         &field.type_description,
         parent_name,
         &user_spec_field_name,
         add_another_type,
     )?;
-    let doc_comment = from_field_description(&field.description);
+    let doc_comment = from_field_description(&field.description, "  ");
     let prop_line = format!(
         "  {}{}: {};",
         doc_comment, user_spec_field_name, field_value
@@ -107,9 +125,9 @@ where
 }
 
 fn from_interface_type(
+    ctx: &mut CompileContext,
     interface_type: &InterfaceType,
     selection_set: &query::SelectionSet,
-    schema: &Schema,
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
@@ -118,17 +136,19 @@ fn from_interface_type(
     for selection in &selection_set.items {
         match selection {
             query::Selection::Field(field_def) => {
-                let add_another_type = |field_type_name: &str, field_object_name: &str| {
-                    let mut sub_field_type = from_selection_set(
-                        &field_def.selection_set,
-                        schema,
-                        field_object_name,
-                        field_type_name,
-                    )?;
-                    types.append(&mut sub_field_type);
-                    Ok(())
-                };
+                let add_another_type =
+                    |ctx: &mut CompileContext, field_type_name: &str, field_object_name: &str| {
+                        let mut sub_field_type = from_selection_set(
+                            ctx,
+                            &field_def.selection_set,
+                            field_object_name,
+                            field_type_name,
+                        )?;
+                        types.append(&mut sub_field_type);
+                        Ok(())
+                    };
                 let field = from_field_of_product(
+                    ctx,
                     &field_def,
                     &interface_type.fields,
                     parent_name,
@@ -150,8 +170,8 @@ fn from_interface_type(
     for (type_name, fragment_def) in spread_implementing_types.iter() {
         let compiled_type_name = format!("{}_{}", parent_name, type_name);
         let mut selection_type = from_selection_set(
+            ctx,
             &fragment_def.selection_set,
-            schema,
             &compiled_type_name,
             type_name,
         )?;
@@ -175,9 +195,9 @@ fn from_interface_type(
 }
 
 fn from_object_type(
+    ctx: &mut CompileContext,
     object_type: &ObjectType,
     selection_set: &query::SelectionSet,
-    schema: &Schema,
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
@@ -185,17 +205,19 @@ fn from_object_type(
     for selection in &selection_set.items {
         match selection {
             query::Selection::Field(f_def) => {
-                let add_another_type = |field_type_name: &str, field_object_name: &str| {
-                    let mut sub_field_type = from_selection_set(
-                        &f_def.selection_set,
-                        schema,
-                        field_object_name,
-                        field_type_name,
-                    )?;
-                    types.append(&mut sub_field_type);
-                    Ok(())
-                };
+                let add_another_type =
+                    |ctx: &mut CompileContext, field_type_name: &str, field_object_name: &str| {
+                        let mut sub_field_type = from_selection_set(
+                            ctx,
+                            &f_def.selection_set,
+                            field_object_name,
+                            field_type_name,
+                        )?;
+                        types.append(&mut sub_field_type);
+                        Ok(())
+                    };
                 let field = from_field_of_product(
+                    ctx,
                     &f_def,
                     &object_type.fields,
                     parent_name,
@@ -216,48 +238,133 @@ fn from_object_type(
 }
 
 fn from_selection_set(
+    ctx: &mut CompileContext,
     selection_set: &query::SelectionSet,
-    schema: &Schema,
     parent_name: &str,
     parent_type_name: &str,
 ) -> Result<Vec<String>> {
-    let parent_type = schema
+    let parent_type = ctx
+        .schema
         .get_type_for_name(parent_type_name)
         .ok_or_else(|| Error::MissingType(parent_type_name.to_string()))?;
     match &parent_type.definition {
         TypeDefintion::Object(object_type) => {
-            from_object_type(object_type, selection_set, schema, parent_name)
+            from_object_type(ctx, object_type, selection_set, parent_name)
         }
         TypeDefintion::Interface(interface_type) => {
-            from_interface_type(interface_type, selection_set, schema, parent_name)
+            from_interface_type(ctx, interface_type, selection_set, parent_name)
         }
-        TypeDefintion::Scalar(name) => Err(Error::SelectionSetOnScalar(name.clone())),
-        TypeDefintion::Enum(enum_type) => Err(Error::UnknownError),
+        TypeDefintion::Scalar(_) => {
+            Err(Error::SelectionSetOnWrongType(parent_type_name.to_string()))
+        }
+        TypeDefintion::Enum(_) => Err(Error::SelectionSetOnWrongType(parent_type_name.to_string())),
     }
 }
 
-fn from_query(query: &query::Query, schema: &Schema) -> Result<(String, String)> {
+fn from_query(ctx: &mut CompileContext, query: &query::Query) -> Result<(String, String)> {
     let query_name = "Query";
     let name = query.name.clone().unwrap_or_else(|| query_name.to_string());
-    let type_defs = from_selection_set(&query.selection_set, schema, &name, query_name)?;
-    Ok((name, type_defs.join("\n\n")))
+    let type_defs = from_selection_set(ctx, &query.selection_set, &name, query_name)?;
+    let imports = ctx.compile_imports();
+    let contents = format!("{}{}", imports, type_defs.join("\n\n"));
+    Ok((name, contents))
 }
 
 fn from_operation(
+    ctx: &mut CompileContext,
     operation: &query::OperationDefinition,
-    schema: &Schema,
 ) -> Result<(String, String)> {
     match operation {
-        query::OperationDefinition::Query(query) => from_query(query, schema),
+        query::OperationDefinition::Query(query) => from_query(ctx, query),
         _ => Err(Error::UnknownError),
     }
 }
 
-pub fn compile(definition: &query::Definition, schema: &Schema) -> Result<(String, String)> {
-    let (name, compiled_contents) = match definition {
-        query::Definition::Operation(op_def) => from_operation(op_def, schema),
+pub fn compile(definition: &query::Definition, schema: &Schema) -> Result<Compile> {
+    let mut ctx = CompileContext::new(schema);
+    let (name, contents) = match definition {
+        query::Definition::Operation(op_def) => from_operation(&mut ctx, op_def),
         query::Definition::Fragment(frag_def) => return Err(Error::UnknownError),
     }?;
     let filename = format!("{}.ts", name);
-    Ok((filename, compiled_contents))
+    Ok(Compile {
+        filename,
+        contents,
+        used_global_types: ctx.global_types,
+    })
+}
+
+fn enum_def_from_type(name: &str, description: &Option<String>, enum_type: &EnumType) -> String {
+    let doc_comment = from_field_description(description, "");
+    let values = enum_type
+        .possible_values
+        .iter()
+        .map(|value| format!("  {} = \"{}\",", value, value))
+        .collect::<Vec<String>>()
+        .join("\n");
+    format!("{}export enum {} {{\n{}\n}}", doc_comment, name, values)
+}
+
+fn enums_from_names(schema: &Schema, global_names: &HashSet<String>) -> Result<Vec<String>> {
+    let mut enums = Vec::new();
+    for name in global_names {
+        let global_type = schema
+            .get_type_for_name(name)
+            .ok_or_else(|| Error::MissingType(name.to_string()))?;
+        match &global_type.definition {
+            TypeDefintion::Enum(enum_type) => {
+                enums.push(enum_def_from_type(
+                    name,
+                    &global_type.description,
+                    enum_type,
+                ));
+            }
+            _ => return Err(Error::NotEnumGlobal(name.to_string())),
+        }
+    }
+    Ok(enums)
+}
+
+pub fn compile_globals(
+    schema: &Schema,
+    global_names: &HashSet<String>,
+) -> Result<GlobalTypesCompile> {
+    let enums = enums_from_names(schema, global_names)?;
+    Ok(GlobalTypesCompile {
+        filename: String::from("globalTypes.ts"),
+        contents: enums.join("\n\n"),
+    })
+}
+
+struct CompileContext<'a> {
+    schema: &'a Schema,
+    global_types: HashSet<String>,
+}
+
+impl<'a> CompileContext<'a> {
+    fn new(schema: &'a Schema) -> Self {
+        CompileContext {
+            schema,
+            global_types: HashSet::new(),
+        }
+    }
+
+    fn compile_imports(&self) -> String {
+        if self.global_types.is_empty() {
+            return String::from("");
+        }
+        let names = self
+            .global_types
+            .iter()
+            .map(|name| name.to_string())
+            .collect::<Vec<String>>();
+        format!(
+            "import {{ {} }} from \"__generated__/globalTypes\";\n\n",
+            names.join(", ")
+        )
+    }
+
+    fn add_type(&mut self, name: &str) {
+        self.global_types.insert(name.to_string());
+    }
 }

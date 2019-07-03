@@ -1,4 +1,5 @@
 use super::graphql::schema::Schema;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,20 +25,20 @@ impl Work {
         Ok(more_work)
     }
 
-    pub fn run(&self, schema: &Arc<Schema>) -> Vec<Work> {
+    pub fn run(&self, schema: &Arc<Schema>) -> (Option<Vec<Work>>, Option<HashSet<String>>) {
         match self {
-            Work::DirEntry(path) => self.run_dir_entry(path).unwrap_or_else(|_| vec![]),
+            Work::DirEntry(path) => (self.run_dir_entry(path).ok(), None),
             Work::GraphQL(path) => {
-                match super::graphql::compile_file(path, schema) {
-                    Ok(val) => {
-                        dbg!(val);
-                    }
-                    Err(e) => {
-                        dbg!(e);
-                    }
-                }
-                vec![]
+                let globals = match super::graphql::compile_file(path, schema) {
+                    Ok(used_type_names) => Some(used_type_names),
+                    Err(e) => None,
+                };
+                (None, globals)
             }
         }
     }
+}
+
+pub fn compile_global_file(dir: &PathBuf, schema: &Arc<Schema>, global_names: &HashSet<String>) {
+    super::graphql::compile_global_types_file(dir, schema, global_names);
 }

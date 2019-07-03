@@ -15,7 +15,6 @@ pub enum Error {
 #[derive(Debug)]
 pub enum ScalarType {
     Custom(String),
-    Null,
     Boolean,
     String,
     Float,
@@ -47,7 +46,7 @@ pub enum FieldTypeDefintion {
     List(Box<FieldType>),
     Object(String),
     Interface(String),
-    Enum(EnumType),
+    Enum(String),
     Scalar(ScalarType),
 }
 
@@ -89,6 +88,14 @@ impl FieldType {
                 "INTERFACE" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
                     let definition = FieldTypeDefintion::Interface(name);
+                    return Ok(FieldType {
+                        definition,
+                        nullable,
+                    });
+                }
+                "ENUM" => {
+                    let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
+                    let definition = FieldTypeDefintion::Enum(name);
                     return Ok(FieldType {
                         definition,
                         nullable,

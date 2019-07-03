@@ -9,6 +9,7 @@ query MeetingQuery($meetingId: ID!) {
   meeting: node(id: $meetingId) {
     id
     ... on Meeting {
+      notarial_acts
       canComplete: can_complete
       documentBundle: document_bundle {
         documents {
