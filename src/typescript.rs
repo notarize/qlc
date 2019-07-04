@@ -7,7 +7,7 @@ pub enum Error {
     UnknownError,
     MissingType(String),
     NotEnumGlobal(String),
-    UnknownField(String),
+    UnknownField(String, String),
     SelectionSetOnWrongType(String),
     MissingTypeCondition,
 }
@@ -108,7 +108,7 @@ where
         .unwrap_or_else(|| field_name.to_string());
     let field = fields
         .get(field_name)
-        .ok_or_else(|| Error::UnknownField(query_field.name.clone()))?;
+        .ok_or_else(|| Error::UnknownField(parent_name.to_string(), field_name.clone()))?;
     let field_value = from_schema_field_type(
         ctx,
         &field.type_description,
@@ -270,6 +270,18 @@ fn from_query(ctx: &mut CompileContext, query: &query::Query) -> Result<(String,
     Ok((name, contents))
 }
 
+fn from_fragment(
+    ctx: &mut CompileContext,
+    fragment: &query::FragmentDefinition,
+) -> Result<(String, String)> {
+    let name = fragment.name.clone();
+    let query::TypeCondition::On(type_name) = &fragment.type_condition;
+    let type_defs = from_selection_set(ctx, &fragment.selection_set, &name, type_name)?;
+    let imports = ctx.compile_imports();
+    let contents = format!("{}{}", imports, type_defs.join("\n\n"));
+    Ok((name, contents))
+}
+
 fn from_operation(
     ctx: &mut CompileContext,
     operation: &query::OperationDefinition,
@@ -284,7 +296,7 @@ pub fn compile(definition: &query::Definition, schema: &Schema) -> Result<Compil
     let mut ctx = CompileContext::new(schema);
     let (name, contents) = match definition {
         query::Definition::Operation(op_def) => from_operation(&mut ctx, op_def),
-        query::Definition::Fragment(frag_def) => return Err(Error::UnknownError),
+        query::Definition::Fragment(frag_def) => from_fragment(&mut ctx, frag_def),
     }?;
     let filename = format!("{}.ts", name);
     Ok(Compile {

@@ -1,0 +1,12 @@
+fragment basicDocumentBundle on DocumentBundle {
+  id
+  completionRequirements: completion_requirements
+  documents {
+    totalCount
+    edges {
+      node {
+        id
+      }
+    }
+  }
+}
