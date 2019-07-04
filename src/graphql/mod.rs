@@ -37,12 +37,10 @@ fn makedir_p(path: &PathBuf) -> Result<(), Error> {
     }
 }
 
-fn make_generated_dir(path: &PathBuf) -> Result<PathBuf, Error> {
-    let mut generated_dir_path = path.clone();
-    generated_dir_path.pop();
-    generated_dir_path.push("__generated__");
-    makedir_p(&generated_dir_path)?;
-    Ok(generated_dir_path)
+fn make_generated_dir(mut path: PathBuf) -> Result<PathBuf, Error> {
+    path.push("__generated__");
+    makedir_p(&path)?;
+    Ok(path)
 }
 
 pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<HashSet<String>, Error> {
@@ -53,12 +51,14 @@ pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<HashSet<String>, 
         return Err(Error::OnlyOneOperationPerDocumentSupported);
     }
 
-    let mut generated_dir_path = make_generated_dir(path)?;
-
+    let mut parent_dir = path.clone();
+    parent_dir.pop();
+    let mut generated_dir_path = make_generated_dir(parent_dir)?;
     let the_compile =
         super::typescript::compile(&parsed.definitions[0], schema).map_err(Error::CompileError)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
+    generated_dir_path.pop();
     Ok(the_compile.used_global_types)
 }
 
@@ -67,7 +67,10 @@ pub fn compile_global_types_file(
     schema: &Schema,
     global_names: &HashSet<String>,
 ) -> Result<(), Error> {
-    let mut generated_dir_path = make_generated_dir(path)?;
+    if global_names.is_empty() {
+        return Ok(());
+    }
+    let mut generated_dir_path = make_generated_dir(path.clone())?;
     let the_compile =
         super::typescript::compile_globals(schema, global_names).map_err(Error::CompileError)?;
     generated_dir_path.push(the_compile.filename);
