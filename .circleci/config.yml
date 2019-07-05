@@ -1,0 +1,100 @@
+version: 2.1
+
+commands:
+  attach_made_workspace:
+    description: Attach workspace generated files from another job
+    steps:
+      - attach_workspace:
+          at: /root/notarize
+
+executors:
+  default_rust_compiler:
+    docker:
+      - image: rust:1.36.0-stretch
+    working_directory: /root/notarize/qlc
+
+jobs:
+  cargo_init:
+    executor: default_rust_compiler
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - cargo-cache-{{ checksum "Cargo.lock" }}
+            - cargo-cache-
+      - run:
+          name: Building
+          command: cargo build --all-targets --all-features
+      - save_cache:
+          paths:
+            - /usr/local/cargo/registry
+            - target/debug/.fingerprint
+            - target/debug/build
+            - target/debug/deps
+          key: cargo-cache-{{ checksum "Cargo.lock" }}
+      - persist_to_workspace:
+          root: /root/notarize
+          paths:
+            - qlc
+
+  fmt:
+    executor: default_rust_compiler
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Getting rustfmt
+          command: rustup component add rustfmt
+      - run:
+          name: Checking formating
+          command: cargo fmt --all -- --check
+
+  lint:
+    executor: default_rust_compiler
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Getting clippy
+          command: rustup component add clippy
+      - run:
+          name: Linting
+          command: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    executor: default_rust_compiler
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Testing
+          command: cargo test
+          environment:
+            RUST_TEST_THREADS: 2
+
+workflows:
+  version: 2
+  Everything:
+    jobs:
+      - cargo_init:
+          filters:
+            branches:
+              ignore: master
+
+      - test:
+          requires:
+            - cargo_init
+          filters:
+            branches:
+              ignore: master
+
+      - lint:
+          requires:
+            - cargo_init
+          filters:
+            branches:
+              ignore: master
+
+      - fmt:
+          requires:
+            - cargo_init
+          filters:
+            branches:
+              ignore: master
