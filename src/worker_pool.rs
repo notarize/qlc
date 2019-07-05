@@ -134,6 +134,9 @@ impl WorkerPool {
         let num_waiting = Arc::new(AtomicU8::new(0));
         let num_quitting = Arc::new(AtomicU8::new(0));
         let mut handles = vec![];
+        let initial_work = Work::DirEntry(root_dir.clone());
+        let root = Message::Work(initial_work);
+        tx.send(root).unwrap();
         for _ in 0..threads {
             let worker = Worker {
                 threads,
@@ -149,9 +152,6 @@ impl WorkerPool {
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
         }
-        let initial_work = Work::DirEntry(root_dir.clone());
-        let root = Message::Work(initial_work);
-        tx.send(root).unwrap();
         drop(tx);
         drop(rx);
         for handle in handles {
