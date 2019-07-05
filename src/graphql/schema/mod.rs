@@ -1,6 +1,9 @@
-use serde::Deserialize;
+//! Produce consumable schmea from introspetion JSON
+use json::*;
 use std::collections::HashMap;
 use std::io::Read;
+
+mod json;
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,7 +26,7 @@ pub enum ScalarType {
 }
 
 impl ScalarType {
-    fn from(name: &str) -> Self {
+    fn from_name(name: &str) -> Self {
         match name {
             "Boolean" => ScalarType::Boolean,
             "String" => ScalarType::String,
@@ -51,7 +54,7 @@ pub enum FieldTypeDefintion {
 }
 
 impl FieldType {
-    fn from(json: FieldSubtypeJSON) -> Result<Self, Error> {
+    fn from_field_type_json(json: FieldSubtypeJSON) -> Result<Self, Error> {
         let mut nullable = true;
         let mut iter = json;
         loop {
@@ -62,7 +65,7 @@ impl FieldType {
                 }
                 "LIST" => {
                     iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForList)?;
-                    let field_type = FieldType::from(iter)?;
+                    let field_type = FieldType::from_field_type_json(iter)?;
                     let definition = FieldTypeDefintion::List(Box::new(field_type));
                     return Ok(FieldType {
                         definition,
@@ -79,7 +82,7 @@ impl FieldType {
                 }
                 "SCALAR" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::Scalar(ScalarType::from(&name));
+                    let definition = FieldTypeDefintion::Scalar(ScalarType::from_name(&name));
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -122,12 +125,12 @@ pub struct Field {
 }
 
 impl Field {
-    fn from(json: FieldJSON) -> Self {
+    fn from_field_json(json: FieldJSON) -> Self {
         let type_desc = json.type_desc;
         Field {
             name: json.name,
             description: json.description,
-            type_description: FieldType::from(type_desc).unwrap(),
+            type_description: FieldType::from_field_type_json(type_desc).unwrap(),
         }
     }
 }
@@ -163,13 +166,13 @@ pub struct Type {
 }
 
 impl Type {
-    fn from(json: TypeJSON) -> Result<Self, Error> {
+    fn from_type_json(json: TypeJSON) -> Result<Self, Error> {
         let definition = match json.kind.as_ref() {
             "OBJECT" => {
                 let fields_json = json.fields.unwrap_or_else(Vec::new);
                 let mut fields = HashMap::with_capacity(fields_json.len());
                 for field_json in fields_json {
-                    fields.insert(field_json.name.clone(), Field::from(field_json));
+                    fields.insert(field_json.name.clone(), Field::from_field_json(field_json));
                 }
                 let object_type = ObjectType { fields };
                 TypeDefintion::Object(object_type)
@@ -190,7 +193,7 @@ impl Type {
                 let fields_json = json.fields.unwrap_or_else(Vec::new);
                 let mut fields = HashMap::with_capacity(fields_json.len());
                 for field_json in fields_json {
-                    fields.insert(field_json.name.clone(), Field::from(field_json));
+                    fields.insert(field_json.name.clone(), Field::from_field_json(field_json));
                 }
                 let interface_type = InterfaceType {
                     name: json.name,
@@ -209,66 +212,17 @@ impl Type {
     }
 }
 
-#[derive(Deserialize)]
-struct FieldSubtypeJSON {
-    kind: String,
-    name: Option<String>,
-    #[serde(rename(deserialize = "ofType"))]
-    of_type: Option<Box<FieldSubtypeJSON>>,
-}
-
-#[derive(Deserialize)]
-struct FieldJSON {
-    name: String,
-    description: Option<String>,
-    #[serde(rename(deserialize = "type"))]
-    type_desc: FieldSubtypeJSON,
-}
-
-#[derive(Deserialize)]
-struct EnumValuesJSON {
-    name: String,
-}
-
-#[derive(Deserialize)]
-struct TypeJSON {
-    kind: String,
-    name: String,
-    description: Option<String>,
-    fields: Option<Vec<FieldJSON>>,
-    #[serde(rename(deserialize = "enumValues"))]
-    enum_values: Option<Vec<EnumValuesJSON>>,
-}
-
-#[derive(Deserialize)]
-struct SchemaJSON {
-    types: Vec<TypeJSON>,
-}
-
-#[derive(Deserialize)]
-struct DataJSON {
-    #[serde(rename(deserialize = "__schema"))]
-    schema: SchemaJSON,
-}
-
-#[derive(Deserialize)]
-struct RawSchemaJSON {
-    data: DataJSON,
-}
-
 pub struct Schema {
     types: HashMap<String, Type>,
 }
 
 impl Schema {
     pub fn from_reader<R: Read>(reader: R) -> Result<Self, Error> {
-        let parsed: RawSchemaJSON =
-            serde_json::from_reader(reader).map_err(Error::JSONParseError)?;
-        let parsed_schema = parsed.data.schema;
-        let mut types = HashMap::with_capacity(parsed_schema.types.len());
-        for ty in parsed_schema.types {
-            let name = ty.name.clone();
-            let processed_type = Type::from(ty)?;
+        let schema_json = SchemaJSON::from_reader(reader).map_err(Error::JSONParseError)?;
+        let mut types = HashMap::with_capacity(schema_json.types.len());
+        for type_json in schema_json.types {
+            let name = type_json.name.clone();
+            let processed_type = Type::from_type_json(type_json)?;
             types.insert(name, processed_type);
         }
         Ok(Schema { types })
