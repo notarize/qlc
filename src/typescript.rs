@@ -8,6 +8,7 @@ pub enum Error {
     MissingType(String),
     NotEnumGlobal(String),
     UnknownField(String, String),
+    OperationUnsupported,
     SelectionSetOnWrongType(String),
     MissingTypeCondition,
 }
@@ -304,13 +305,26 @@ fn from_fragment(
     Ok((name, contents))
 }
 
+fn from_mutation(ctx: &mut CompileContext, mutation: &query::Mutation) -> Result<(String, String)> {
+    let mutation_name = "Mutation";
+    let name = mutation
+        .name
+        .clone()
+        .unwrap_or_else(|| mutation_name.to_string());
+    let type_defs = from_selection_set(ctx, &mutation.selection_set, &name, mutation_name)?;
+    let imports = ctx.compile_imports();
+    let contents = format!("{}{}", imports, type_defs.join("\n\n"));
+    Ok((name, contents))
+}
+
 fn from_operation(
     ctx: &mut CompileContext,
     operation: &query::OperationDefinition,
 ) -> Result<(String, String)> {
     match operation {
         query::OperationDefinition::Query(query) => from_query(ctx, query),
-        _ => Err(Error::UnknownError),
+        query::OperationDefinition::Mutation(mutation) => from_mutation(ctx, mutation),
+        _ => Err(Error::OperationUnsupported),
     }
 }
 

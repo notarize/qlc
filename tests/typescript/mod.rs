@@ -67,3 +67,35 @@ export interface myViewerFragment {
     ",
     );
 }
+
+#[test]
+fn compile_simple_mutation() {
+    basic_success_assert(
+        "
+mutation CreateWitness {
+  createWitness {
+    meeting {
+      id
+    }
+  }
+}
+    ",
+        "CreateWitness.ts",
+        "
+export interface CreateWitness_createWitness_meeting {
+  id: string;
+}
+
+export interface CreateWitness_createWitness {
+  meeting: CreateWitness_createWitness_meeting | null;
+}
+
+export interface CreateWitness {
+  /**
+   * Creates a witness
+   */
+  createWitness: CreateWitness_createWitness | null;
+}
+    ",
+    );
+}
