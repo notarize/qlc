@@ -131,8 +131,10 @@ fn from_interface_type(
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
-    let mut this_interface_fields = Vec::new();
+    let mut concrete_fields = Vec::new();
     let mut spread_implementing_types = HashMap::new();
+    // First lets collect all the fields that are implemented right on the interface
+    // and also all the types that are spread on this interface.
     for selection in &selection_set.items {
         match selection {
             query::Selection::Field(field_def) => {
@@ -154,7 +156,7 @@ fn from_interface_type(
                     parent_name,
                     add_another_type,
                 )?;
-                this_interface_fields.push(field);
+                concrete_fields.push(field);
             }
             query::Selection::InlineFragment(fragment_def) => {
                 let type_name = match &fragment_def.type_condition {
@@ -166,7 +168,9 @@ fn from_interface_type(
             _ => return Err(Error::UnknownError),
         }
     }
-    let mut this_interface_types = Vec::with_capacity(spread_implementing_types.len() + 1);
+
+    // Now we iterate through spread types and add them as top level types
+    let mut compiled_interface_types = Vec::with_capacity(spread_implementing_types.len() + 1);
     for (type_name, fragment_def) in spread_implementing_types.iter() {
         let compiled_type_name = format!("{}_{}", parent_name, type_name);
         let mut selection_type = from_selection_set(
@@ -175,21 +179,39 @@ fn from_interface_type(
             &compiled_type_name,
             type_name,
         )?;
-        this_interface_types.push(compiled_type_name);
+        compiled_interface_types.push(compiled_type_name);
         types.append(&mut selection_type);
     }
-    let mut main_rh_def = this_interface_types.join(" | ");
-    if !this_interface_fields.is_empty() {
-        let compiled_type_name = format!("{}_{}", parent_name, interface_type.name);
-        let this_interface_type = format!(
-            "export interface {} {{\n{}\n}}",
-            compiled_type_name,
-            this_interface_fields.join("\n")
-        );
-        main_rh_def = format!("({}) & {}", main_rh_def, compiled_type_name);
+    let spread_types_rh_def = compiled_interface_types.join(" | ");
+
+    // Now lets compile the interface type itself and add it to the top level types if
+    // need be.
+    let compiled_interface_type_name = format!("{}_{}", parent_name, interface_type.name);
+    let this_interface_type = format!(
+        "export interface {} {{\n{}\n}}",
+        compiled_interface_type_name,
+        concrete_fields.join("\n")
+    );
+    if !concrete_fields.is_empty() {
         types.push(this_interface_type);
     }
-    let interface = format!("export type {} = {};", parent_name, main_rh_def,);
+
+    // Finally we can define this top level type by combining spread types and concrete
+    // fields.
+    let rh_def = match (
+        compiled_interface_types.is_empty(),
+        concrete_fields.is_empty(),
+    ) {
+        (true, true) => return Err(Error::UnknownError),
+        (true, false) => compiled_interface_type_name,
+        (false, true) => spread_types_rh_def,
+        (false, false) => format!(
+            "({}) & {}",
+            spread_types_rh_def, compiled_interface_type_name
+        ),
+    };
+
+    let interface = format!("export type {} = {};", parent_name, rh_def);
     types.push(interface);
     Ok(types)
 }
