@@ -1,17 +1,23 @@
 use super::graphql::schema::*;
 use graphql_parser::query;
 use std::collections::{HashMap, HashSet};
+use variable::from_variable_defs;
+
+mod variable;
 
 #[derive(Debug)]
 pub enum Error {
     UnknownError,
     MissingType(String),
-    NotEnumGlobal(String),
+    NotGlobalType(String),
     UnknownField(String, String),
     UnknownFragment(String),
     OperationUnsupported,
     SelectionSetOnWrongType(String),
     MissingTypeCondition,
+    InvalidFieldDef(String),
+    InputObjectInOutput(String),
+    OutputInInput(String),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -86,6 +92,9 @@ where
             object_name
         }
         FieldTypeDefintion::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
+        FieldTypeDefintion::InputObject(name) => {
+            return Err(Error::InputObjectInOutput(name.to_string()))
+        }
     };
     if field_type.nullable {
         return Ok(format!("{} | null", output));
@@ -319,7 +328,10 @@ fn from_selection_set(
 fn from_query(ctx: &mut CompileContext, query: &query::Query) -> Result<(String, String)> {
     let query_name = "Query";
     let name = query.name.clone().unwrap_or_else(|| query_name.to_string());
-    let type_defs = from_selection_set(ctx, &query.selection_set, &name, query_name)?;
+    let mut type_defs = from_selection_set(ctx, &query.selection_set, &name, query_name)?;
+
+    let mut var_defs = from_variable_defs(ctx, &query.variable_definitions, &name)?;
+    append_optional(&mut type_defs, &mut var_defs);
     let imports = ctx.compile_imports();
     let contents = format!("{}{}", imports, type_defs.join("\n\n"));
     Ok((name, contents))
@@ -343,7 +355,9 @@ fn from_mutation(ctx: &mut CompileContext, mutation: &query::Mutation) -> Result
         .name
         .clone()
         .unwrap_or_else(|| mutation_name.to_string());
-    let type_defs = from_selection_set(ctx, &mutation.selection_set, &name, mutation_name)?;
+    let mut type_defs = from_selection_set(ctx, &mutation.selection_set, &name, mutation_name)?;
+    let mut var_defs = from_variable_defs(ctx, &mutation.variable_definitions, &name)?;
+    append_optional(&mut type_defs, &mut var_defs);
     let imports = ctx.compile_imports();
     let contents = format!("{}{}", imports, type_defs.join("\n\n"));
     Ok((name, contents))
@@ -357,6 +371,12 @@ fn from_operation(
         query::OperationDefinition::Query(query) => from_query(ctx, query),
         query::OperationDefinition::Mutation(mutation) => from_mutation(ctx, mutation),
         _ => Err(Error::OperationUnsupported),
+    }
+}
+
+fn append_optional<T>(outer_vec: &mut Vec<T>, inner: &mut Option<Vec<T>>) {
+    if let Some(mut inner_vec) = inner.as_mut() {
+        outer_vec.append(&mut inner_vec);
     }
 }
 
@@ -378,6 +398,39 @@ pub fn compile(
     })
 }
 
+fn from_input_def_field_def(field_name: &str, field_type: &FieldType) -> Result<String> {
+    let output = match &field_type.definition {
+        FieldTypeDefintion::List(sub_field) => {
+            let inner_str = from_input_def_field_def(field_name, &sub_field)?;
+            format!("({})[]", inner_str)
+        }
+        FieldTypeDefintion::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
+        FieldTypeDefintion::Enum(enum_type) => enum_type.to_string(),
+        FieldTypeDefintion::InputObject(name) => name.to_string(),
+        _ => return Err(Error::InvalidFieldDef(field_name.to_string())),
+    };
+    if field_type.nullable {
+        return Ok(format!("{} | null", output));
+    }
+    Ok(output)
+}
+
+fn input_def_from_type(input_type: &InputObjectType) -> Result<String> {
+    let mut fields = Vec::new();
+    let mut sorted = input_type.fields.iter().collect::<Vec<(&String, &Field)>>();
+    sorted.sort_unstable_by_key(|item| item.0);
+    for (name, field) in sorted {
+        let doc = from_field_description(&field.description, "  ");
+        let field_type = from_input_def_field_def(name, &field.type_description)?;
+        fields.push(format!("  {}{}: {};", doc, name, field_type));
+    }
+    Ok(format!(
+        "export interface {} {{\n{}\n}}",
+        input_type.name,
+        fields.join("\n")
+    ))
+}
+
 fn enum_def_from_type(name: &str, description: &Option<String>, enum_type: &EnumType) -> String {
     let doc_comment = from_field_description(description, "");
     let values = enum_type
@@ -389,40 +442,78 @@ fn enum_def_from_type(name: &str, description: &Option<String>, enum_type: &Enum
     format!("{}export enum {} {{\n{}\n}}", doc_comment, name, values)
 }
 
-fn enums_from_names(schema: &Schema, global_names: &HashSet<String>) -> Result<Vec<String>> {
-    let mut enums = Vec::new();
-    let mut sorted_names = global_names.iter().collect::<Vec<&String>>();
-    sorted_names.sort();
-    for name in sorted_names {
+fn add_sub_input_objects<'a>(
+    name_to_type: &mut HashMap<&'a str, &'a Type>,
+    schema: &'a Schema,
+    current_type: &'a Type,
+) -> Result<()> {
+    if let TypeDefintion::InputObject(input_object_type) = &current_type.definition {
+        for field in input_object_type.fields.values() {
+            match &field.type_description.definition {
+                FieldTypeDefintion::InputObject(input_obj_name) => {
+                    let global_type = schema
+                        .get_type_for_name(input_obj_name)
+                        .ok_or_else(|| Error::MissingType(input_obj_name.to_string()))?;
+                    name_to_type.insert(input_obj_name, global_type);
+                    add_sub_input_objects(name_to_type, schema, global_type)?;
+                }
+                FieldTypeDefintion::Enum(enum_name) => {
+                    let global_type = schema
+                        .get_type_for_name(enum_name)
+                        .ok_or_else(|| Error::MissingType(enum_name.to_string()))?;
+                    name_to_type.insert(enum_name, global_type);
+                }
+                FieldTypeDefintion::Scalar(_) => {}
+                _ => return Err(Error::OutputInInput(field.name.clone())),
+            }
+        }
+    }
+    Ok(())
+}
+
+fn global_types_from_names(schema: &Schema, global_names: &HashSet<String>) -> Result<Vec<String>> {
+    // We want to add names that are referenced by input objects, recursively.
+    let mut name_to_type = HashMap::with_capacity(global_names.len());
+    for name in global_names {
         let global_type = schema
             .get_type_for_name(name)
             .ok_or_else(|| Error::MissingType(name.to_string()))?;
+        add_sub_input_objects(&mut name_to_type, schema, global_type)?;
+        name_to_type.insert(name, global_type);
+    }
+    let mut types = Vec::new();
+    let mut sorted_names = name_to_type.iter().collect::<Vec<_>>();
+    sorted_names.sort_unstable_by_key(|value| value.0);
+    for (name, global_type) in sorted_names {
         match &global_type.definition {
             TypeDefintion::Enum(enum_type) => {
-                enums.push(enum_def_from_type(
+                types.push(enum_def_from_type(
                     name,
                     &global_type.description,
                     enum_type,
                 ));
             }
-            _ => return Err(Error::NotEnumGlobal(name.to_string())),
+            TypeDefintion::InputObject(input_object_type) => {
+                types.push(input_def_from_type(input_object_type)?);
+            }
+            _ => return Err(Error::NotGlobalType(name.to_string())),
         }
     }
-    Ok(enums)
+    Ok(types)
 }
 
 pub fn compile_globals(
     schema: &Schema,
     global_names: &HashSet<String>,
 ) -> Result<GlobalTypesCompile> {
-    let enums = enums_from_names(schema, global_names)?;
+    let types = global_types_from_names(schema, global_names)?;
     Ok(GlobalTypesCompile {
         filename: String::from("globalTypes.ts"),
-        contents: enums.join("\n\n"),
+        contents: types.join("\n\n"),
     })
 }
 
-struct CompileContext<'a> {
+pub struct CompileContext<'a> {
     schema: &'a Schema,
     global_types: HashSet<String>,
     imported_fragments: HashMap<String, query::FragmentDefinition>,

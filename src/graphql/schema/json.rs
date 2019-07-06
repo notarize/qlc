@@ -28,6 +28,8 @@ pub struct TypeJSON {
     pub kind: String,
     pub name: String,
     pub description: Option<String>,
+    #[serde(rename(deserialize = "inputFields"))]
+    pub input_fields: Option<Vec<FieldJSON>>,
     pub fields: Option<Vec<FieldJSON>>,
     #[serde(rename(deserialize = "enumValues"))]
     pub enum_values: Option<Vec<EnumValuesJSON>>,

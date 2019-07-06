@@ -3,6 +3,7 @@ use crate::helpers::basic_success_assert;
 mod enumeration;
 mod external_fragment;
 mod interface;
+mod variable;
 
 #[test]
 fn compile_simple_query() {
