@@ -43,6 +43,46 @@ export interface TestQuery {
 }
 
 #[test]
+fn compile_typename() {
+    basic_success_assert(
+        "
+query TestQuery {
+  viewer {
+    as: __typename
+    user {
+      __typename
+      id
+    }
+  }
+}
+    ",
+        "TestQuery.ts",
+        r#"
+export interface TestQuery_viewer_user {
+  __typename: "User";
+  id: string;
+}
+
+export interface TestQuery_viewer {
+  as: "Viewer";
+  /**
+   * The user associated with the current viewer. Use this field to get info
+   * about current viewer and access any records associated w/ their account.
+   */
+  user: TestQuery_viewer_user | null;
+}
+
+export interface TestQuery {
+  /**
+   * Access to fields relevant to a consumer of the application
+   */
+  viewer: TestQuery_viewer | null;
+}
+    "#,
+    );
+}
+
+#[test]
 fn compile_simple_fragment() {
     basic_success_assert(
         "

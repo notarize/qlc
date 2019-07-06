@@ -97,6 +97,7 @@ fn from_field_of_product<F>(
     ctx: &mut CompileContext,
     query_field: &query::Field,
     fields: &FieldsLookup,
+    parent_type_name: &str,
     parent_name: &str,
     add_another_type: F,
 ) -> Result<String>
@@ -108,17 +109,28 @@ where
         .alias
         .clone()
         .unwrap_or_else(|| field_name.to_string());
-    let field = fields
-        .get(field_name)
-        .ok_or_else(|| Error::UnknownField(parent_name.to_string(), field_name.clone()))?;
-    let field_value = from_schema_field_type(
-        ctx,
-        &field.type_description,
-        parent_name,
-        &user_spec_field_name,
-        add_another_type,
-    )?;
-    let doc_comment = from_field_description(&field.description, "  ");
+    let (field_value, doc_comment) = match field_name.as_ref() {
+        "__typename" => {
+            let type_literal = format!("\"{}\"", parent_type_name);
+            (type_literal, "".to_string())
+        }
+        _ => {
+            let field = fields
+                .get(field_name)
+                .ok_or_else(|| Error::UnknownField(parent_name.to_string(), field_name.clone()))?;
+            let field_value = from_schema_field_type(
+                ctx,
+                &field.type_description,
+                parent_name,
+                &user_spec_field_name,
+                add_another_type,
+            )?;
+            (
+                field_value,
+                from_field_description(&field.description, "  "),
+            )
+        }
+    };
     let prop_line = format!(
         "  {}{}: {};",
         doc_comment, user_spec_field_name, field_value
@@ -130,6 +142,7 @@ fn collect_fields_selection_set(
     ctx: &mut CompileContext,
     selection_set: &query::SelectionSet,
     fields: &FieldsLookup,
+    parent_type_name: &str,
     parent_name: &str,
     types: &mut Vec<String>,
 ) -> Result<(Vec<String>, HashMap<String, query::SelectionSet>)> {
@@ -149,8 +162,14 @@ fn collect_fields_selection_set(
                         types.append(&mut sub_field_type);
                         Ok(())
                     };
-                let field =
-                    from_field_of_product(ctx, &field_def, fields, parent_name, add_another_type)?;
+                let field = from_field_of_product(
+                    ctx,
+                    &field_def,
+                    fields,
+                    parent_type_name,
+                    parent_name,
+                    add_another_type,
+                )?;
                 concrete_fields.push(field);
             }
             query::Selection::InlineFragment(fragment_def) => {
@@ -171,6 +190,7 @@ fn collect_fields_selection_set(
                         ctx,
                         &fragment_def.selection_set,
                         fields,
+                        parent_type_name,
                         parent_name,
                         types,
                     )?;
@@ -186,6 +206,7 @@ fn from_interface_type(
     ctx: &mut CompileContext,
     interface_type: &InterfaceType,
     selection_set: &query::SelectionSet,
+    parent_type_name: &str,
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
@@ -193,6 +214,7 @@ fn from_interface_type(
         ctx,
         selection_set,
         &interface_type.fields,
+        parent_type_name,
         parent_name,
         &mut types,
     )?;
@@ -244,6 +266,7 @@ fn from_object_type(
     ctx: &mut CompileContext,
     object_type: &ObjectType,
     selection_set: &query::SelectionSet,
+    parent_type_name: &str,
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
@@ -251,6 +274,7 @@ fn from_object_type(
         ctx,
         selection_set,
         &object_type.fields,
+        parent_type_name,
         parent_name,
         &mut types,
     )?;
@@ -274,12 +298,20 @@ fn from_selection_set(
         .get_type_for_name(parent_type_name)
         .ok_or_else(|| Error::MissingType(parent_type_name.to_string()))?;
     match &parent_type.definition {
-        TypeDefintion::Object(object_type) => {
-            from_object_type(ctx, object_type, selection_set, parent_name)
-        }
-        TypeDefintion::Interface(interface_type) => {
-            from_interface_type(ctx, interface_type, selection_set, parent_name)
-        }
+        TypeDefintion::Object(object_type) => from_object_type(
+            ctx,
+            object_type,
+            selection_set,
+            parent_type_name,
+            parent_name,
+        ),
+        TypeDefintion::Interface(interface_type) => from_interface_type(
+            ctx,
+            interface_type,
+            selection_set,
+            parent_type_name,
+            parent_name,
+        ),
         _ => Err(Error::SelectionSetOnWrongType(parent_type_name.to_string())),
     }
 }

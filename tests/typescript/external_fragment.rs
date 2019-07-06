@@ -33,7 +33,7 @@ fragment testFragment on Viewer {
         .unwrap();
 
     cmd.assert().success();
-    let temp_dir = temp_dir.persist_if(true);
+
     assert_generated(
         &temp_dir,
         "testQuery.ts",
@@ -128,7 +128,7 @@ fragment userFragmentTwo on User {
         .unwrap();
 
     cmd.assert().success();
-    let temp_dir = temp_dir.persist_if(true);
+
     assert_generated(
         &temp_dir,
         "testQuery.ts",
@@ -178,6 +178,47 @@ export interface TestQuery {
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
+}
+    "#,
+    );
+    assert_generated(
+        &temp_dir,
+        "globalTypes.ts",
+        r#"
+/**
+ * The possible standalone features and features inherited from tier for an orgnization
+ */
+export enum Feature {
+  PARTNER_API = "PARTNER_API",
+  EMPLOYEES = "EMPLOYEES",
+  CUSTOM_LOGO = "CUSTOM_LOGO",
+  DOCUMENT_TEMPLATES = "DOCUMENT_TEMPLATES",
+  TRANSACTION_TEMPLATES = "TRANSACTION_TEMPLATES",
+  TRANSACTION_ANALYTICS = "TRANSACTION_ANALYTICS",
+  TRANSACTION_FILTERING = "TRANSACTION_FILTERING",
+  ADVANCED_TRANSACTION_DETAILS = "ADVANCED_TRANSACTION_DETAILS",
+  ADVANCED_TRANSACTION_CREATION = "ADVANCED_TRANSACTION_CREATION",
+  CUSTOM_EMAILS = "CUSTOM_EMAILS",
+  SMS_INVITATION = "SMS_INVITATION",
+  ESIGN = "ESIGN",
+  TRANSACTION_RECORD_FULL_ACCESS = "TRANSACTION_RECORD_FULL_ACCESS",
+  BATCH_PAYMENT = "BATCH_PAYMENT",
+}
+
+/**
+ * Describes a user's role within the system
+ */
+export enum UserRole {
+  ADMIN = "ADMIN",
+  NOTARY = "NOTARY",
+  CUSTOMER = "CUSTOMER",
+  WITNESS = "WITNESS",
+  ORGANIZATION_MEMBER = "ORGANIZATION_MEMBER",
+  ORGANIZATION_MEMBER_OWNER = "ORGANIZATION_MEMBER_OWNER",
+  ORGANIZATION_MEMBER_ADMIN = "ORGANIZATION_MEMBER_ADMIN",
+  ORGANIZATION_MEMBER_EMPLOYEE = "ORGANIZATION_MEMBER_EMPLOYEE",
+  ORGANIZATION_MEMBER_PARTNER = "ORGANIZATION_MEMBER_PARTNER",
+  ORGANIZATION_MEMBER_NOTARIZE_CLOSING_OPS = "ORGANIZATION_MEMBER_NOTARIZE_CLOSING_OPS",
 }
     "#,
     );
