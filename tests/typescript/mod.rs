@@ -1,6 +1,7 @@
 use crate::helpers::basic_success_assert;
 
 mod enumeration;
+mod external_fragment;
 mod interface;
 
 #[test]

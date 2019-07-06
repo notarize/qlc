@@ -8,6 +8,7 @@ pub enum Error {
     MissingType(String),
     NotEnumGlobal(String),
     UnknownField(String, String),
+    UnknownFragment(String),
     OperationUnsupported,
     SelectionSetOnWrongType(String),
     MissingTypeCondition,
@@ -95,7 +96,7 @@ where
 fn from_field_of_product<F>(
     ctx: &mut CompileContext,
     query_field: &query::Field,
-    fields: &HashMap<String, Field>,
+    fields: &FieldsLookup,
     parent_name: &str,
     add_another_type: F,
 ) -> Result<String>
@@ -125,17 +126,15 @@ where
     Ok(prop_line)
 }
 
-fn from_interface_type(
+fn collect_fields_selection_set(
     ctx: &mut CompileContext,
-    interface_type: &InterfaceType,
     selection_set: &query::SelectionSet,
+    fields: &FieldsLookup,
     parent_name: &str,
-) -> Result<Vec<String>> {
-    let mut types = Vec::new();
+    types: &mut Vec<String>,
+) -> Result<(Vec<String>, HashMap<String, query::SelectionSet>)> {
     let mut concrete_fields = Vec::new();
     let mut spread_implementing_types = HashMap::new();
-    // First lets collect all the fields that are implemented right on the interface
-    // and also all the types that are spread on this interface.
     for selection in &selection_set.items {
         match selection {
             query::Selection::Field(field_def) => {
@@ -150,13 +149,8 @@ fn from_interface_type(
                         types.append(&mut sub_field_type);
                         Ok(())
                     };
-                let field = from_field_of_product(
-                    ctx,
-                    &field_def,
-                    &interface_type.fields,
-                    parent_name,
-                    add_another_type,
-                )?;
+                let field =
+                    from_field_of_product(ctx, &field_def, fields, parent_name, add_another_type)?;
                 concrete_fields.push(field);
             }
             query::Selection::InlineFragment(fragment_def) => {
@@ -164,24 +158,53 @@ fn from_interface_type(
                     Some(query::TypeCondition::On(name)) => name,
                     _ => return Err(Error::MissingTypeCondition),
                 };
-                spread_implementing_types.insert(type_name, fragment_def);
+                spread_implementing_types
+                    .insert(type_name.to_string(), fragment_def.selection_set.clone());
             }
-            _ => return Err(Error::UnknownError),
+            query::Selection::FragmentSpread(spread) => {
+                let fragment_def = ctx
+                    .get_foreign_fragment(&spread.fragment_name)
+                    .ok_or_else(|| Error::UnknownFragment(spread.fragment_name.clone()))?
+                    .clone();
+                let (mut inner_fields, inner_spread_implementing_types) =
+                    collect_fields_selection_set(
+                        ctx,
+                        &fragment_def.selection_set,
+                        fields,
+                        parent_name,
+                        types,
+                    )?;
+                concrete_fields.append(&mut inner_fields);
+                spread_implementing_types.extend(inner_spread_implementing_types);
+            }
         }
     }
+    Ok((concrete_fields, spread_implementing_types))
+}
+
+fn from_interface_type(
+    ctx: &mut CompileContext,
+    interface_type: &InterfaceType,
+    selection_set: &query::SelectionSet,
+    parent_name: &str,
+) -> Result<Vec<String>> {
+    let mut types = Vec::new();
+    let (concrete_fields, spread_implementing_types) = collect_fields_selection_set(
+        ctx,
+        selection_set,
+        &interface_type.fields,
+        parent_name,
+        &mut types,
+    )?;
 
     // Now we iterate through spread types and add them as top level types
     let mut compiled_interface_types = Vec::with_capacity(spread_implementing_types.len() + 1);
-    for (type_name, fragment_def) in spread_implementing_types.iter() {
+    for (type_name, inner_selection_set) in spread_implementing_types.iter() {
         let compiled_type_name = format!("{}_{}", parent_name, type_name);
-        let mut selection_type = from_selection_set(
-            ctx,
-            &fragment_def.selection_set,
-            &compiled_type_name,
-            type_name,
-        )?;
+        let mut selection_types =
+            from_selection_set(ctx, &inner_selection_set, &compiled_type_name, type_name)?;
         compiled_interface_types.push(compiled_type_name);
-        types.append(&mut selection_type);
+        types.append(&mut selection_types);
     }
     let spread_types_rh_def = compiled_interface_types.join(" | ");
 
@@ -224,37 +247,17 @@ fn from_object_type(
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
-    let mut fields = Vec::with_capacity(selection_set.items.len());
-    for selection in &selection_set.items {
-        match selection {
-            query::Selection::Field(f_def) => {
-                let add_another_type =
-                    |ctx: &mut CompileContext, field_type_name: &str, field_object_name: &str| {
-                        let mut sub_field_type = from_selection_set(
-                            ctx,
-                            &f_def.selection_set,
-                            field_object_name,
-                            field_type_name,
-                        )?;
-                        types.append(&mut sub_field_type);
-                        Ok(())
-                    };
-                let field = from_field_of_product(
-                    ctx,
-                    &f_def,
-                    &object_type.fields,
-                    parent_name,
-                    add_another_type,
-                )?;
-                fields.push(field);
-            }
-            _ => return Err(Error::UnknownError),
-        }
-    }
+    let (concrete_fields, _spread_implementing_types) = collect_fields_selection_set(
+        ctx,
+        selection_set,
+        &object_type.fields,
+        parent_name,
+        &mut types,
+    )?;
     let interface = format!(
         "export interface {} {{\n{}\n}}",
         parent_name,
-        fields.join("\n")
+        concrete_fields.join("\n")
     );
     types.push(interface);
     Ok(types)
@@ -277,10 +280,7 @@ fn from_selection_set(
         TypeDefintion::Interface(interface_type) => {
             from_interface_type(ctx, interface_type, selection_set, parent_name)
         }
-        TypeDefintion::Scalar(_) => {
-            Err(Error::SelectionSetOnWrongType(parent_type_name.to_string()))
-        }
-        TypeDefintion::Enum(_) => Err(Error::SelectionSetOnWrongType(parent_type_name.to_string())),
+        _ => Err(Error::SelectionSetOnWrongType(parent_type_name.to_string())),
     }
 }
 
@@ -328,8 +328,12 @@ fn from_operation(
     }
 }
 
-pub fn compile(definition: &query::Definition, schema: &Schema) -> Result<Compile> {
-    let mut ctx = CompileContext::new(schema);
+pub fn compile(
+    definition: &query::Definition,
+    schema: &Schema,
+    imported_fragments: HashMap<String, query::FragmentDefinition>,
+) -> Result<Compile> {
+    let mut ctx = CompileContext::new(schema, imported_fragments);
     let (name, contents) = match definition {
         query::Definition::Operation(op_def) => from_operation(&mut ctx, op_def),
         query::Definition::Fragment(frag_def) => from_fragment(&mut ctx, frag_def),
@@ -387,13 +391,18 @@ pub fn compile_globals(
 struct CompileContext<'a> {
     schema: &'a Schema,
     global_types: HashSet<String>,
+    imported_fragments: HashMap<String, query::FragmentDefinition>,
 }
 
 impl<'a> CompileContext<'a> {
-    fn new(schema: &'a Schema) -> Self {
+    fn new(
+        schema: &'a Schema,
+        imported_fragments: HashMap<String, query::FragmentDefinition>,
+    ) -> Self {
         CompileContext {
             schema,
             global_types: HashSet::new(),
+            imported_fragments,
         }
     }
 
@@ -414,5 +423,9 @@ impl<'a> CompileContext<'a> {
 
     fn add_type(&mut self, name: &str) {
         self.global_types.insert(name.to_string());
+    }
+
+    fn get_foreign_fragment(&self, name: &str) -> Option<&query::FragmentDefinition> {
+        self.imported_fragments.get(name)
     }
 }

@@ -31,7 +31,10 @@ impl Work {
             Work::GraphQL(path) => {
                 let globals = match super::graphql::compile_file(path, schema) {
                     Ok(used_type_names) => Some(used_type_names),
-                    Err(e) => None,
+                    Err(e) => {
+                        dbg!(path, e);
+                        None
+                    }
                 };
                 (None, globals)
             }

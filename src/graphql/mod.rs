@@ -1,5 +1,6 @@
+use graphql_parser::query::{Definition, FragmentDefinition};
 use schema::Schema;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
@@ -11,6 +12,7 @@ pub enum Error {
     FileError(std::io::Error),
     SchemaJSONParseError(schema::Error),
     GraphqlFileParseError(graphql_parser::query::ParseError),
+    OnlyImportFragments,
     CompileError(super::typescript::Error),
     OnlyOneOperationPerDocumentSupported,
 }
@@ -43,19 +45,65 @@ fn make_generated_dir(mut path: PathBuf) -> Result<PathBuf, Error> {
     Ok(path)
 }
 
+fn get_file_path_of_fragment(import_comment: &str, current_dir: &PathBuf) -> PathBuf {
+    let import_filename = &import_comment[9..import_comment.len() - 1];
+    if import_filename.starts_with('.') {
+        return current_dir.clone().join(import_filename);
+    }
+    PathBuf::from(import_filename) // TODO
+}
+
+fn add_imported_fragments(
+    current_dir: &PathBuf,
+    imports: &mut HashMap<String, FragmentDefinition>,
+    contents: &str,
+) -> Result<(), Error> {
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !trimmed.starts_with("#import \"") {
+            break;
+        }
+        let mut file_path = get_file_path_of_fragment(trimmed, current_dir);
+        let contents = read_graphql_file(&file_path).map_err(Error::FileError)?;
+        file_path.pop();
+        add_imported_fragments(&file_path, imports, &contents)?;
+        let mut parsed =
+            graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
+        if parsed.definitions.len() != 1 {
+            return Err(Error::OnlyOneOperationPerDocumentSupported);
+        }
+        for def in parsed.definitions.drain(0..1) {
+            match def {
+                Definition::Fragment(f_def) => {
+                    let fragment_name = f_def.name.clone();
+                    imports.insert(fragment_name, f_def);
+                }
+                _ => return Err(Error::OnlyImportFragments),
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
     let parsed = graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
+    let mut parsed_imported_fragments = HashMap::new();
+    let mut parent_dir = path.clone();
+    parent_dir.pop();
+    add_imported_fragments(&parent_dir, &mut parsed_imported_fragments, &contents)?;
 
     if parsed.definitions.len() != 1 {
         return Err(Error::OnlyOneOperationPerDocumentSupported);
     }
 
-    let mut parent_dir = path.clone();
-    parent_dir.pop();
     let mut generated_dir_path = make_generated_dir(parent_dir)?;
     let the_compile =
-        super::typescript::compile(&parsed.definitions[0], schema).map_err(Error::CompileError)?;
+        super::typescript::compile(&parsed.definitions[0], schema, parsed_imported_fragments)
+            .map_err(Error::CompileError)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
     generated_dir_path.pop();

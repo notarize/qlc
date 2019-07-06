@@ -5,6 +5,8 @@ use std::io::Read;
 
 mod json;
 
+pub type FieldsLookup = HashMap<String, Field>;
+
 #[derive(Debug)]
 pub enum Error {
     MissingTypeOfForList,
@@ -137,7 +139,7 @@ impl Field {
 
 #[derive(Debug)]
 pub struct ObjectType {
-    pub fields: HashMap<String, Field>,
+    pub fields: FieldsLookup,
 }
 
 #[derive(Debug)]
@@ -148,7 +150,7 @@ pub struct EnumType {
 #[derive(Debug)]
 pub struct InterfaceType {
     pub name: String,
-    pub fields: HashMap<String, Field>,
+    pub fields: FieldsLookup,
 }
 
 #[derive(Debug)]
