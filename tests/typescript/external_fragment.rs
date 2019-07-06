@@ -133,7 +133,7 @@ fragment userFragmentTwo on User {
         &temp_dir,
         "testQuery.ts",
         r#"
-import { UserRole, Feature } from "__generated__/globalTypes";
+import { Feature, UserRole } from "__generated__/globalTypes";
 
 export interface TestQuery_viewer_user_scheduled_tiers {
   /**

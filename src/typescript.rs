@@ -391,7 +391,9 @@ fn enum_def_from_type(name: &str, description: &Option<String>, enum_type: &Enum
 
 fn enums_from_names(schema: &Schema, global_names: &HashSet<String>) -> Result<Vec<String>> {
     let mut enums = Vec::new();
-    for name in global_names {
+    let mut sorted_names = global_names.iter().collect::<Vec<&String>>();
+    sorted_names.sort();
+    for name in sorted_names {
         let global_type = schema
             .get_type_for_name(name)
             .ok_or_else(|| Error::MissingType(name.to_string()))?;
@@ -442,11 +444,12 @@ impl<'a> CompileContext<'a> {
         if self.global_types.is_empty() {
             return String::from("");
         }
-        let names = self
+        let mut names = self
             .global_types
             .iter()
             .map(|name| name.to_string())
             .collect::<Vec<String>>();
+        names.sort();
         format!(
             "import {{ {} }} from \"__generated__/globalTypes\";\n\n",
             names.join(", ")
