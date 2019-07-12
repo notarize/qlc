@@ -2,6 +2,82 @@ use crate::helpers::{assert_generated, qlc_command_with_fake_dir_and_schema};
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 
+mod interface;
+mod union;
+
+#[test]
+fn compile_deep_fragments() {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    temp_dir
+        .child("main.graphql")
+        .write_str(
+            r#"
+#import "./testfragment.graphql"
+
+query TestQuery {
+  viewer {
+    id
+    user {
+      id
+      firstName: first_name
+    }
+    ... on Viewer {
+      id
+      id2: id
+      ... on Viewer {
+        id3: id
+      }
+      ...testFragment
+    }
+  }
+}
+        "#,
+        )
+        .unwrap();
+
+    temp_dir
+        .child("testfragment.graphql")
+        .write_str(
+            "
+fragment testFragment on Viewer {
+  user { id }
+}
+        ",
+        )
+        .unwrap();
+
+    cmd.assert().success();
+
+    assert_generated(
+        &temp_dir,
+        "testQuery.ts",
+        "
+export interface TestQuery_viewer_user {
+  firstName: string | null;
+  id: string;
+}
+
+export interface TestQuery_viewer {
+  id: string;
+  id2: string;
+  id3: string;
+  /**
+   * The user associated with the current viewer. Use this field to get info
+   * about current viewer and access any records associated w/ their account.
+   */
+  user: TestQuery_viewer_user | null;
+}
+
+export interface TestQuery {
+  /**
+   * Access to fields relevant to a consumer of the application
+   */
+  viewer: TestQuery_viewer | null;
+}
+    ",
+    );
+}
+
 #[test]
 fn compile_single_fragment() {
     let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
@@ -147,21 +223,21 @@ export interface TestQuery_viewer_user_scheduled_tiers {
 }
 
 export interface TestQuery_viewer_user {
-  id: string;
-  roles: (UserRole | null)[] | null;
-  systemId: number | null;
   /**
    * An user's active features and features inherited from tier
    */
   featureList: (Feature)[];
-  /**
-   * Whether or not user is being used for single transaction
-   */
-  singleUse: boolean;
+  id: string;
+  roles: (UserRole | null)[] | null;
   /**
    * A user's scheduled tiers including historical, current and future
    */
   scheduled_tiers: (TestQuery_viewer_user_scheduled_tiers)[];
+  /**
+   * Whether or not user is being used for single transaction
+   */
+  singleUse: boolean;
+  systemId: number | null;
 }
 
 export interface TestQuery_viewer {

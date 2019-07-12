@@ -8,6 +8,7 @@ pub fn qlc_command_with_fake_dir() -> (Command, TempDir) {
     let mut cmd = Command::cargo_bin("qlc").unwrap();
     let temp_dir = assert_fs::TempDir::new().unwrap();
     cmd.arg(temp_dir.path());
+    cmd.arg("--num-threads=2");
     (cmd, temp_dir)
 }
 

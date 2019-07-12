@@ -1,10 +1,8 @@
 use crate::helpers::basic_success_assert;
 
+mod complex;
 mod enumeration;
-mod external_fragment;
-mod interface;
 mod variable;
-mod union;
 
 #[test]
 fn compile_simple_query() {
