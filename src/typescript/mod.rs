@@ -11,12 +11,15 @@ pub enum Error {
     MissingType(String),
     NotGlobalType(String),
     UnknownField(String, String),
+    UnionMissingType(String, String),
     UnknownFragment(String),
     OperationUnsupported,
     SelectionSetOnWrongType(String),
     MissingTypeCondition,
     InvalidFieldDef(String),
     InputObjectInOutput(String),
+    NoSpreadsOnObject(String),
+    NoConcreteFieldsOnUnion(String),
     OutputInInput(String),
 }
 
@@ -72,27 +75,32 @@ where
     F: FnMut(&mut CompileContext, &str, &str) -> Result<()>,
 {
     let output = match &field_type.definition {
-        FieldTypeDefintion::List(sub_field) => {
+        FieldTypeDefinition::List(sub_field) => {
             let inner_str =
                 from_schema_field_type(ctx, &sub_field, parent_name, field_name, add_another_type)?;
             format!("({})[]", inner_str)
         }
-        FieldTypeDefintion::Enum(enum_type) => {
+        FieldTypeDefinition::Enum(enum_type) => {
             ctx.add_type(enum_type);
             enum_type.to_string()
         }
-        FieldTypeDefintion::Object(name) => {
+        FieldTypeDefinition::Object(name) => {
             let object_name = format!("{}_{}", parent_name, field_name);
             add_another_type(ctx, name, &object_name)?;
             object_name
         }
-        FieldTypeDefintion::Interface(name) => {
+        FieldTypeDefinition::Interface(name) => {
             let object_name = format!("{}_{}", parent_name, field_name);
             add_another_type(ctx, name, &object_name)?;
             object_name
         }
-        FieldTypeDefintion::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
-        FieldTypeDefintion::InputObject(name) => {
+        FieldTypeDefinition::Union(union_name) => {
+            let object_name = format!("{}_{}", parent_name, field_name);
+            add_another_type(ctx, union_name, &object_name)?;
+            object_name
+        },
+        FieldTypeDefinition::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
+        FieldTypeDefinition::InputObject(name) => {
             return Err(Error::InputObjectInOutput(name.to_string()))
         }
     };
@@ -279,7 +287,7 @@ fn from_object_type(
     parent_name: &str,
 ) -> Result<Vec<String>> {
     let mut types = Vec::new();
-    let (concrete_fields, _spread_implementing_types) = collect_fields_selection_set(
+    let (concrete_fields, spread_implementing_types) = collect_fields_selection_set(
         ctx,
         selection_set,
         &object_type.fields,
@@ -287,12 +295,70 @@ fn from_object_type(
         parent_name,
         &mut types,
     )?;
+    if !spread_implementing_types.is_empty() {
+        return Err(Error::NoSpreadsOnObject(parent_name.to_string()));
+    }
     let interface = format!(
         "export interface {} {{\n{}\n}}",
         parent_name,
         concrete_fields.join("\n")
     );
     types.push(interface);
+    Ok(types)
+}
+
+fn from_union_type(
+    ctx: &mut CompileContext,
+    union_type: &UnionType,
+    selection_set: &query::SelectionSet,
+    parent_name: &str,
+) -> Result<Vec<String>> {
+    let mut types = Vec::new();
+    let mut spread_implementing_types = HashMap::new();
+    for selection in &selection_set.items {
+        match selection {
+            query::Selection::Field(_) => {
+                return Err(Error::NoConcreteFieldsOnUnion(parent_name.to_string()));
+            }
+            query::Selection::InlineFragment(fragment_def) => {
+                let type_name = match &fragment_def.type_condition {
+                    Some(query::TypeCondition::On(name)) => name,
+                    _ => return Err(Error::MissingTypeCondition),
+                };
+                spread_implementing_types
+                    .insert(type_name.to_string(), fragment_def.selection_set.clone());
+            }
+            query::Selection::FragmentSpread(spread) => {
+                let fragment_def = ctx
+                    .get_foreign_fragment(&spread.fragment_name)
+                    .ok_or_else(|| Error::UnknownFragment(spread.fragment_name.clone()))?
+                    .clone();
+                let query::TypeCondition::On(type_name) = &fragment_def.type_condition;
+                if !union_type.possible_types.contains(type_name) {
+                    return Err(Error::UnionMissingType(union_type.name.clone(), type_name.to_string()));
+                }
+                spread_implementing_types.insert(type_name.to_string(), fragment_def.selection_set.clone());
+            }
+        }
+    }
+
+    let mut compiled_union_types = Vec::with_capacity(spread_implementing_types.len() + 1);
+    let mut sorted_implementing_types = spread_implementing_types.iter().collect::<Vec<_>>();
+    sorted_implementing_types.sort_unstable_by_key(|val| val.0);
+    for (type_name, inner_selection_set) in sorted_implementing_types {
+        let compiled_type_name = format!("{}_{}", parent_name, type_name);
+        let mut selection_types =
+            from_selection_set(ctx, &inner_selection_set, &compiled_type_name, type_name)?;
+        compiled_union_types.push(compiled_type_name);
+        types.append(&mut selection_types);
+    }
+
+    let union = format!(
+        "export type {} = {};",
+        parent_name,
+        compiled_union_types.join(" | ")
+    );
+    types.push(union);
     Ok(types)
 }
 
@@ -307,18 +373,24 @@ fn from_selection_set(
         .get_type_for_name(parent_type_name)
         .ok_or_else(|| Error::MissingType(parent_type_name.to_string()))?;
     match &parent_type.definition {
-        TypeDefintion::Object(object_type) => from_object_type(
+        TypeDefinition::Object(object_type) => from_object_type(
             ctx,
             object_type,
             selection_set,
             parent_type_name,
             parent_name,
         ),
-        TypeDefintion::Interface(interface_type) => from_interface_type(
+        TypeDefinition::Interface(interface_type) => from_interface_type(
             ctx,
             interface_type,
             selection_set,
             parent_type_name,
+            parent_name,
+        ),
+        TypeDefinition::Union(union_type) => from_union_type(
+            ctx,
+            union_type,
+            selection_set,
             parent_name,
         ),
         _ => Err(Error::SelectionSetOnWrongType(parent_type_name.to_string())),
@@ -400,13 +472,13 @@ pub fn compile(
 
 fn from_input_def_field_def(field_name: &str, field_type: &FieldType) -> Result<String> {
     let output = match &field_type.definition {
-        FieldTypeDefintion::List(sub_field) => {
+        FieldTypeDefinition::List(sub_field) => {
             let inner_str = from_input_def_field_def(field_name, &sub_field)?;
             format!("({})[]", inner_str)
         }
-        FieldTypeDefintion::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
-        FieldTypeDefintion::Enum(enum_type) => enum_type.to_string(),
-        FieldTypeDefintion::InputObject(name) => name.to_string(),
+        FieldTypeDefinition::Scalar(sc_type) => from_schema_field_scalar(&sc_type),
+        FieldTypeDefinition::Enum(enum_type) => enum_type.to_string(),
+        FieldTypeDefinition::InputObject(name) => name.to_string(),
         _ => return Err(Error::InvalidFieldDef(field_name.to_string())),
     };
     if field_type.nullable {
@@ -447,23 +519,23 @@ fn add_sub_input_objects<'a>(
     schema: &'a Schema,
     current_type: &'a Type,
 ) -> Result<()> {
-    if let TypeDefintion::InputObject(input_object_type) = &current_type.definition {
+    if let TypeDefinition::InputObject(input_object_type) = &current_type.definition {
         for field in input_object_type.fields.values() {
             match &field.type_description.definition {
-                FieldTypeDefintion::InputObject(input_obj_name) => {
+                FieldTypeDefinition::InputObject(input_obj_name) => {
                     let global_type = schema
                         .get_type_for_name(input_obj_name)
                         .ok_or_else(|| Error::MissingType(input_obj_name.to_string()))?;
                     name_to_type.insert(input_obj_name, global_type);
                     add_sub_input_objects(name_to_type, schema, global_type)?;
                 }
-                FieldTypeDefintion::Enum(enum_name) => {
+                FieldTypeDefinition::Enum(enum_name) => {
                     let global_type = schema
                         .get_type_for_name(enum_name)
                         .ok_or_else(|| Error::MissingType(enum_name.to_string()))?;
                     name_to_type.insert(enum_name, global_type);
                 }
-                FieldTypeDefintion::Scalar(_) => {}
+                FieldTypeDefinition::Scalar(_) => {}
                 _ => return Err(Error::OutputInInput(field.name.clone())),
             }
         }
@@ -486,14 +558,14 @@ fn global_types_from_names(schema: &Schema, global_names: &HashSet<String>) -> R
     sorted_names.sort_unstable_by_key(|value| value.0);
     for (name, global_type) in sorted_names {
         match &global_type.definition {
-            TypeDefintion::Enum(enum_type) => {
+            TypeDefinition::Enum(enum_type) => {
                 types.push(enum_def_from_type(
                     name,
                     &global_type.description,
                     enum_type,
                 ));
             }
-            TypeDefintion::InputObject(input_object_type) => {
+            TypeDefinition::InputObject(input_object_type) => {
                 types.push(input_def_from_type(input_object_type)?);
             }
             _ => return Err(Error::NotGlobalType(name.to_string())),

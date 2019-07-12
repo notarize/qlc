@@ -1,6 +1,6 @@
 //! Produce consumable schmea from introspetion JSON
 use json::*;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::io::Read;
 
 mod json;
@@ -12,8 +12,9 @@ pub enum Error {
     MissingTypeOfForList,
     MissingTypeOfForNonNull,
     MissingNameForField,
-    UnknownTypeKind(String, String),
+    UnknownType(String, String),
     EnumMissingValues(String),
+    UnionMissingTypes(String),
     JSONParseError(serde_json::Error),
 }
 
@@ -43,15 +44,16 @@ impl ScalarType {
 #[derive(Debug)]
 pub struct FieldType {
     pub nullable: bool,
-    pub definition: FieldTypeDefintion,
+    pub definition: FieldTypeDefinition,
 }
 
 #[derive(Debug)]
-pub enum FieldTypeDefintion {
+pub enum FieldTypeDefinition {
     List(Box<FieldType>),
     Object(String),
     Interface(String),
     Enum(String),
+    Union(String),
     Scalar(ScalarType),
     InputObject(String),
 }
@@ -69,7 +71,7 @@ impl FieldType {
                 "LIST" => {
                     iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForList)?;
                     let field_type = FieldType::from_field_type_json(iter)?;
-                    let definition = FieldTypeDefintion::List(Box::new(field_type));
+                    let definition = FieldTypeDefinition::List(Box::new(field_type));
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -77,7 +79,7 @@ impl FieldType {
                 }
                 "OBJECT" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::Object(name);
+                    let definition = FieldTypeDefinition::Object(name);
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -85,7 +87,7 @@ impl FieldType {
                 }
                 "SCALAR" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::Scalar(ScalarType::from_name(&name));
+                    let definition = FieldTypeDefinition::Scalar(ScalarType::from_name(&name));
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -93,7 +95,7 @@ impl FieldType {
                 }
                 "INTERFACE" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::Interface(name);
+                    let definition = FieldTypeDefinition::Interface(name);
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -101,7 +103,7 @@ impl FieldType {
                 }
                 "ENUM" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::Enum(name);
+                    let definition = FieldTypeDefinition::Enum(name);
                     return Ok(FieldType {
                         definition,
                         nullable,
@@ -109,20 +111,21 @@ impl FieldType {
                 }
                 "INPUT_OBJECT" => {
                     let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
-                    let definition = FieldTypeDefintion::InputObject(name);
+                    let definition = FieldTypeDefinition::InputObject(name);
                     return Ok(FieldType {
                         definition,
                         nullable,
                     });
                 }
-                _ => {
-                    // TODO
-                    let definition = FieldTypeDefintion::Scalar(ScalarType::Boolean);
+                "UNION" =>  {
+                    let name = iter.name.ok_or_else(|| Error::MissingNameForField)?;
+                    let definition = FieldTypeDefinition::Union(name);
                     return Ok(FieldType {
                         definition,
                         nullable,
                     });
                 }
+                name => return Err(Error::UnknownType(name.to_string(), iter.kind.clone())),
             }
         }
     }
@@ -169,18 +172,25 @@ pub struct InputObjectType {
 }
 
 #[derive(Debug)]
-pub enum TypeDefintion {
+pub struct UnionType {
+    pub name: String,
+    pub possible_types: HashSet<String>,
+}
+
+#[derive(Debug)]
+pub enum TypeDefinition {
     Object(ObjectType),
     Enum(EnumType),
     Scalar(String),
     Interface(InterfaceType),
     InputObject(InputObjectType),
+    Union(UnionType),
 }
 
 #[derive(Debug)]
 pub struct Type {
     pub description: Option<String>,
-    pub definition: TypeDefintion,
+    pub definition: TypeDefinition,
 }
 
 fn get_fields_for_complex(json: TypeJSON) -> HashMap<String, Field> {
@@ -199,7 +209,7 @@ impl Type {
             "OBJECT" => {
                 let fields = get_fields_for_complex(json);
                 let object_type = ObjectType { fields };
-                TypeDefintion::Object(object_type)
+                TypeDefinition::Object(object_type)
             }
             "ENUM" => {
                 let name = &json.name;
@@ -210,24 +220,33 @@ impl Type {
                     .map(|v| v.name.clone())
                     .collect();
                 let enum_type = EnumType { possible_values };
-                TypeDefintion::Enum(enum_type)
+                TypeDefinition::Enum(enum_type)
             }
-            "SCALAR" => TypeDefintion::Scalar(json.name),
+            "SCALAR" => TypeDefinition::Scalar(json.name),
             "INTERFACE" => {
                 let name = json.name.clone();
                 let fields = get_fields_for_complex(json);
                 let interface_type = InterfaceType { name, fields };
-                TypeDefintion::Interface(interface_type)
+                TypeDefinition::Interface(interface_type)
             }
             "INPUT_OBJECT" => {
                 let name = json.name.clone();
                 let fields = get_fields_for_complex(json);
                 let input_object_type = InputObjectType { name, fields };
-                TypeDefintion::InputObject(input_object_type)
+                TypeDefinition::InputObject(input_object_type)
             }
-            // TODO
-            "UNION" => TypeDefintion::Scalar(json.name),
-            _ => return Err(Error::UnknownTypeKind(json.name, json.kind)),
+            "UNION" => {
+                let name = json.name.clone();
+                let possible_types = json
+                    .possible_types
+                    .ok_or_else(|| Error::UnionMissingTypes(name.clone()))?
+                    .iter()
+                    .map(|pt| pt.name.clone())
+                    .collect();
+                let union_type = UnionType { name, possible_types };
+                TypeDefinition::Union(union_type)
+            }
+            _ => return Err(Error::UnknownType(json.name, json.kind)),
         };
         Ok(Type {
             description,

@@ -24,10 +24,17 @@ pub struct EnumValuesJSON {
 }
 
 #[derive(Deserialize)]
+pub struct UnionPossibleTypeJSON {
+    pub name: String,
+}
+
+#[derive(Deserialize)]
 pub struct TypeJSON {
     pub kind: String,
     pub name: String,
     pub description: Option<String>,
+    #[serde(rename(deserialize = "possibleTypes"))]
+    pub possible_types: Option<Vec<UnionPossibleTypeJSON>>,
     #[serde(rename(deserialize = "inputFields"))]
     pub input_fields: Option<Vec<FieldJSON>>,
     pub fields: Option<Vec<FieldJSON>>,

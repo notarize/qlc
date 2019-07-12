@@ -4,6 +4,7 @@ mod enumeration;
 mod external_fragment;
 mod interface;
 mod variable;
+mod union;
 
 #[test]
 fn compile_simple_query() {
