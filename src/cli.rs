@@ -1,3 +1,4 @@
+use crate::worker_pool::Error;
 use clap::{crate_authors, crate_version, App, Arg, ArgMatches};
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -61,4 +62,17 @@ impl Config {
                 .unwrap_or_else(|| 4),
         }
     }
+}
+
+pub fn print_work_result(result: Result<(), Vec<Error>>) {
+    let code = match result {
+        Ok(_) => return,
+        Err(errors) => {
+            for error in errors {
+                eprintln!("{:?}", error);
+            }
+            1
+        }
+    };
+    std::process::exit(code);
 }

@@ -7,12 +7,12 @@ extern crate serde_json;
 mod cli;
 mod graphql;
 mod typescript;
-mod work;
 mod worker_pool;
 
 fn main() {
     let config = cli::Config::from_cli();
     let schema = graphql::parse_schema(&config.schema_path).expect("Failed to parse schema");
     let worker_pool = worker_pool::WorkerPool::new(config.number_threads, schema);
-    worker_pool.work(&config.root_dir);
+    let result = worker_pool.work(&config.root_dir);
+    cli::print_work_result(result);
 }

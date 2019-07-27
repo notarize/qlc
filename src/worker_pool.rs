@@ -1,6 +1,7 @@
+use super::graphql;
 use super::graphql::schema::Schema;
-use super::work::{compile_global_file, Work};
 use std::collections::HashSet;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -13,12 +14,62 @@ enum Message {
     Quit,
 }
 
+#[derive(Debug)]
+pub enum Error {
+    CleanupError,
+    GraphQL(graphql::Error),
+    IO(std::io::Error),
+}
+
+#[derive(Debug)]
+enum SuccessWorkResult {
+    MoreWork(Vec<Work>),
+    MoreGlobalTypes(HashSet<String>),
+}
+
+type WorkResult = Result<SuccessWorkResult, Error>;
+
+#[derive(Debug)]
+enum Work {
+    GraphQL(PathBuf),
+    DirEntry(PathBuf),
+}
+
+impl Work {
+    fn run_dir_entry(&self, path: &PathBuf) -> Result<Vec<Work>, std::io::Error> {
+        let readdir = fs::read_dir(path)?;
+        let mut more_work = vec![];
+        for raw_entry in readdir {
+            let path = raw_entry?.path();
+            if path.is_dir() {
+                more_work.push(Work::DirEntry(path));
+            } else if path.is_file() && path.extension().map_or(false, |x| x == "graphql") {
+                more_work.push(Work::GraphQL(path));
+            }
+        }
+        Ok(more_work)
+    }
+
+    fn run(&self, schema: &Arc<Schema>) -> WorkResult {
+        match self {
+            Work::DirEntry(path) => self
+                .run_dir_entry(path)
+                .map(SuccessWorkResult::MoreWork)
+                .map_err(Error::IO),
+            Work::GraphQL(path) => super::graphql::compile_file(path, schema)
+                .map(SuccessWorkResult::MoreGlobalTypes)
+                .map_err(Error::GraphQL),
+        }
+    }
+}
+
 struct Worker {
     threads: u8,
     schema: Arc<Schema>,
     is_waiting: bool,
     is_quitting: bool,
     global_types: Arc<Mutex<HashSet<String>>>,
+    errors: Arc<Mutex<Vec<Error>>>,
     num_waiting: Arc<AtomicU8>,
     num_quitting: Arc<AtomicU8>,
     tx: channel::Sender<Message>,
@@ -28,22 +79,27 @@ struct Worker {
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            let (new_work, used_globals) = work.run(&self.schema);
-            if let Some(works) = new_work {
-                for work in works {
-                    self.tx.send(Message::Work(work)).unwrap();
+            match work.run(&self.schema) {
+                Ok(SuccessWorkResult::MoreGlobalTypes(globals)) => {
+                    let mut self_globals = self.global_types.lock().unwrap();
+                    for global in globals {
+                        self_globals.insert(global);
+                    }
                 }
-            }
-            if let Some(globals) = used_globals {
-                let mut self_globals = self.global_types.lock().unwrap();
-                for global in globals {
-                    self_globals.insert(global);
+                Ok(SuccessWorkResult::MoreWork(works)) => {
+                    for work in works {
+                        self.tx.send(Message::Work(work)).unwrap();
+                    }
+                }
+                Err(e) => {
+                    let mut all_errors = self.errors.lock().unwrap();
+                    all_errors.push(e);
                 }
             }
         }
     }
 
-    fn pop_work(&mut self) -> Option<super::work::Work> {
+    fn pop_work(&mut self) -> Option<Work> {
         loop {
             match self.rx.try_recv() {
                 Ok(Message::Work(work)) => {
@@ -127,9 +183,10 @@ impl WorkerPool {
         }
     }
 
-    pub fn work(&self, root_dir: &PathBuf) {
+    pub fn work(&self, root_dir: &PathBuf) -> Result<(), Vec<Error>> {
         let threads = self.num_workers;
         let global_types = Arc::new(Mutex::new(HashSet::new()));
+        let errors = Arc::new(Mutex::new(Vec::new()));
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicU8::new(0));
         let num_quitting = Arc::new(AtomicU8::new(0));
@@ -140,6 +197,7 @@ impl WorkerPool {
         for _ in 0..threads {
             let worker = Worker {
                 threads,
+                errors: errors.clone(),
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
@@ -159,6 +217,19 @@ impl WorkerPool {
         }
 
         let global_types = global_types.lock().unwrap();
-        compile_global_file(root_dir, &self.schema, &global_types);
+        let mut errors = Arc::try_unwrap(errors)
+            .map_err(|_| vec![Error::CleanupError])?
+            .into_inner()
+            .map_err(|_| vec![Error::CleanupError])?;
+        if let Err(global_type_error) =
+            graphql::compile_global_types_file(root_dir, &self.schema, &global_types)
+        {
+            errors.push(Error::GraphQL(global_type_error));
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
