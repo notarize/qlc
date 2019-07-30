@@ -45,31 +45,36 @@ fn make_generated_dir(mut path: PathBuf) -> Result<PathBuf, Error> {
     Ok(path)
 }
 
-fn get_file_path_of_fragment(import_comment: &str, current_dir: &PathBuf) -> PathBuf {
-    let import_filename = &import_comment[9..import_comment.len() - 1];
+fn get_file_path_of_fragment(
+    import_comment: &str,
+    current_dir: &PathBuf,
+    root_dir: &PathBuf,
+) -> PathBuf {
+    let last_quote = import_comment
+        .rfind('"')
+        .unwrap_or(import_comment.len() - 1);
+    let import_filename = &import_comment[9..last_quote];
     if import_filename.starts_with('.') {
         return current_dir.clone().join(import_filename);
     }
-    PathBuf::from(import_filename) // TODO
+    root_dir.clone().join(import_filename)
 }
 
 fn add_imported_fragments(
     current_dir: &PathBuf,
     imports: &mut HashMap<String, FragmentDefinition>,
     contents: &str,
+    root_dir: &PathBuf,
 ) -> Result<(), Error> {
     for line in contents.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() {
+        if !trimmed.starts_with("#import \"") {
             continue;
         }
-        if !trimmed.starts_with("#import \"") {
-            break;
-        }
-        let mut file_path = get_file_path_of_fragment(trimmed, current_dir);
+        let mut file_path = get_file_path_of_fragment(trimmed, current_dir, root_dir);
         let contents = read_graphql_file(&file_path).map_err(Error::FileError)?;
         file_path.pop();
-        add_imported_fragments(&file_path, imports, &contents)?;
+        add_imported_fragments(&file_path, imports, &contents, root_dir)?;
         let mut parsed =
             graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
         if parsed.definitions.len() != 1 {
@@ -88,13 +93,22 @@ fn add_imported_fragments(
     Ok(())
 }
 
-pub fn compile_file(path: &PathBuf, schema: &Schema) -> Result<HashSet<String>, Error> {
+pub fn compile_file(
+    path: &PathBuf,
+    schema: &Schema,
+    root_dir: &PathBuf,
+) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
     let parsed = graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
     let mut parsed_imported_fragments = HashMap::new();
     let mut parent_dir = path.clone();
     parent_dir.pop();
-    add_imported_fragments(&parent_dir, &mut parsed_imported_fragments, &contents)?;
+    add_imported_fragments(
+        &parent_dir,
+        &mut parsed_imported_fragments,
+        &contents,
+        root_dir,
+    )?;
 
     if parsed.definitions.len() != 1 {
         return Err(Error::OnlyOneOperationPerDocumentSupported);

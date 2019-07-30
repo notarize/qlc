@@ -1,4 +1,4 @@
-use crate::helpers::{assert_generated, qlc_command_with_fake_dir_and_schema};
+use crate::helpers::{assert_generated, qlc_command_with_fake_dir_and_schema, similar};
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 
@@ -135,6 +135,167 @@ export interface TestQuery {
 }
     ",
     );
+}
+
+#[test]
+fn compile_absolute_import_fragments() {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    temp_dir
+        .child("main.graphql")
+        .write_str(
+            r#"
+#import "user/userfragment_one.graphql"
+#import "./testfragment.graphql"
+
+query TestQuery {
+  viewer {
+    id
+    ...testFragment
+    user {
+      ...absoluteUserFragmentOne
+    }
+  }
+}
+        "#,
+        )
+        .unwrap();
+
+    temp_dir
+        .child("testfragment.graphql")
+        .write_str(
+            r#"
+#import "user/userfragment_one.graphql"
+#import "user/userfragment_two.graphql"
+
+fragment testFragment on Viewer {
+  user {
+    id
+    roles
+    ...absoluteUserFragmentOne
+    ...absoluteUserFragmentTwo
+  }
+}
+        "#,
+        )
+        .unwrap();
+
+    temp_dir
+        .child("user/userfragment_one.graphql")
+        .write_str(
+            r#"
+fragment absoluteUserFragmentOne on User {
+  id
+  as: __typename
+}
+        "#,
+        )
+        .unwrap();
+
+    temp_dir
+        .child("user/userfragment_two.graphql")
+        .write_str(
+            r#"
+fragment absoluteUserFragmentTwo on User {
+  id
+  createdAt: created_at
+  customerProfile: customer_profile {
+    id
+  }
+}
+        "#,
+        )
+        .unwrap();
+
+    cmd.assert().success();
+
+    assert_generated(
+        &temp_dir,
+        "testQuery.ts",
+        r#"
+import { UserRole } from "__generated__/globalTypes";
+
+export interface TestQuery_viewer_user_customerProfile {
+  id: string;
+}
+
+export interface TestQuery_viewer_user {
+  as: "User";
+  createdAt: any | null;
+  customerProfile: TestQuery_viewer_user_customerProfile | null;
+  id: string;
+  roles: (UserRole | null)[] | null;
+}
+
+export interface TestQuery_viewer {
+  id: string;
+  /**
+   * The user associated with the current viewer. Use this field to get info
+   * about current viewer and access any records associated w/ their account.
+   */
+  user: TestQuery_viewer_user | null;
+}
+
+export interface TestQuery {
+  /**
+   * Access to fields relevant to a consumer of the application
+   */
+  viewer: TestQuery_viewer | null;
+}
+    "#,
+    );
+
+    assert_generated(
+        &temp_dir,
+        "globalTypes.ts",
+        r#"
+/**
+ * Describes a user's role within the system
+ */
+export enum UserRole {
+  ADMIN = "ADMIN",
+  NOTARY = "NOTARY",
+  CUSTOMER = "CUSTOMER",
+  WITNESS = "WITNESS",
+  ORGANIZATION_MEMBER = "ORGANIZATION_MEMBER",
+  ORGANIZATION_MEMBER_OWNER = "ORGANIZATION_MEMBER_OWNER",
+  ORGANIZATION_MEMBER_ADMIN = "ORGANIZATION_MEMBER_ADMIN",
+  ORGANIZATION_MEMBER_EMPLOYEE = "ORGANIZATION_MEMBER_EMPLOYEE",
+  ORGANIZATION_MEMBER_PARTNER = "ORGANIZATION_MEMBER_PARTNER",
+  ORGANIZATION_MEMBER_NOTARIZE_CLOSING_OPS = "ORGANIZATION_MEMBER_NOTARIZE_CLOSING_OPS",
+}
+    "#,
+    );
+
+    let frag_one = temp_dir
+        .child("user")
+        .child("__generated__")
+        .child("absoluteUserFragmentOne.ts");
+    frag_one.assert(similar(
+        r#"
+export interface absoluteUserFragmentOne {
+  as: "User";
+  id: string;
+}
+    "#,
+    ));
+
+    let frag_two = temp_dir
+        .child("user")
+        .child("__generated__")
+        .child("absoluteUserFragmentTwo.ts");
+    frag_two.assert(similar(
+        r#"
+export interface absoluteUserFragmentTwo_customerProfile {
+  id: string;
+}
+
+export interface absoluteUserFragmentTwo {
+  createdAt: any | null;
+  customerProfile: absoluteUserFragmentTwo_customerProfile | null;
+  id: string;
+}
+    "#,
+    ));
 }
 
 #[test]

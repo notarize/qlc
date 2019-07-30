@@ -50,13 +50,13 @@ impl Work {
         Ok(more_work)
     }
 
-    fn run(&self, schema: &Arc<Schema>) -> WorkResult {
+    fn run(&self, schema: &Arc<Schema>, root_dir: &Arc<PathBuf>) -> WorkResult {
         match self {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
                 .map(SuccessWorkResult::MoreWork)
                 .map_err(Error::IO),
-            Work::GraphQL(path) => super::graphql::compile_file(path, schema)
+            Work::GraphQL(path) => super::graphql::compile_file(path, schema, root_dir)
                 .map(SuccessWorkResult::MoreGlobalTypes)
                 .map_err(Error::GraphQL),
         }
@@ -66,6 +66,7 @@ impl Work {
 struct Worker {
     threads: u8,
     schema: Arc<Schema>,
+    root_dir: Arc<PathBuf>,
     is_waiting: bool,
     is_quitting: bool,
     global_types: Arc<Mutex<HashSet<String>>>,
@@ -79,7 +80,7 @@ struct Worker {
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            match work.run(&self.schema) {
+            match work.run(&self.schema, &self.root_dir) {
                 Ok(SuccessWorkResult::MoreGlobalTypes(globals)) => {
                     let mut self_globals = self.global_types.lock().unwrap();
                     for global in globals {
@@ -190,6 +191,7 @@ impl WorkerPool {
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicU8::new(0));
         let num_quitting = Arc::new(AtomicU8::new(0));
+        let shared_root_dir = Arc::new(root_dir.clone());
         let mut handles = vec![];
         let initial_work = Work::DirEntry(root_dir.clone());
         let root = Message::Work(initial_work);
@@ -197,6 +199,7 @@ impl WorkerPool {
         for _ in 0..threads {
             let worker = Worker {
                 threads,
+                root_dir: shared_root_dir.clone(),
                 errors: errors.clone(),
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
