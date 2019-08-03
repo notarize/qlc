@@ -123,24 +123,37 @@ fn add_sub_input_objects<'a>(
 ) -> Result<()> {
     if let TypeDefinition::InputObject(input_object_type) = &current_type.definition {
         for field in input_object_type.fields.values() {
-            match &field.type_description.definition {
-                FieldTypeDefinition::InputObject(input_obj_name) => {
-                    let global_type = schema
-                        .get_type_for_name(input_obj_name)
-                        .ok_or_else(|| Error::MissingType(input_obj_name.to_string()))?;
-                    name_to_type.insert(input_obj_name, global_type);
-                    add_sub_input_objects(name_to_type, schema, global_type)?;
-                }
-                FieldTypeDefinition::Enum(enum_name) => {
-                    let global_type = schema
-                        .get_type_for_name(enum_name)
-                        .ok_or_else(|| Error::MissingType(enum_name.to_string()))?;
-                    name_to_type.insert(enum_name, global_type);
-                }
-                FieldTypeDefinition::Scalar(_) => {}
-                _ => return Err(Error::OutputInInput(field.name.clone())),
-            }
+            add_sub_input_object_field(name_to_type, schema, &field.type_description, &field.name)?;
         }
+    }
+    Ok(())
+}
+
+fn add_sub_input_object_field<'a>(
+    name_to_type: &mut HashMap<&'a str, &'a Type>,
+    schema: &'a Schema,
+    field_type_description: &'a FieldType,
+    field_name: &'a str,
+) -> Result<()> {
+    match &field_type_description.definition {
+        FieldTypeDefinition::InputObject(input_obj_name) => {
+            let global_type = schema
+                .get_type_for_name(input_obj_name)
+                .ok_or_else(|| Error::MissingType(input_obj_name.to_string()))?;
+            name_to_type.insert(input_obj_name, global_type);
+            add_sub_input_objects(name_to_type, schema, global_type)?;
+        }
+        FieldTypeDefinition::Enum(enum_name) => {
+            let global_type = schema
+                .get_type_for_name(enum_name)
+                .ok_or_else(|| Error::MissingType(enum_name.to_string()))?;
+            name_to_type.insert(enum_name, global_type);
+        }
+        FieldTypeDefinition::List(inner) => {
+            add_sub_input_object_field(name_to_type, schema, inner, field_name)?;
+        }
+        FieldTypeDefinition::Scalar(_) => {}
+        _ => return Err(Error::OutputInInput(field_name.to_string())),
     }
     Ok(())
 }

@@ -36,6 +36,83 @@ export interface TestQueryVariables {
 }
 
 #[test]
+fn compile_mutation_with_list_recursive_inputs() {
+    basic_success_with_global_types_assert(
+        "
+mutation CatDocs($input: CategorizeDocumentsInput!) {
+  categorizeDocuments(input: $input) {
+    success
+  }
+}
+        ",
+        "CatDocs.ts",
+        r#"
+import { CategorizeDocumentsInput } from "__generated__/globalTypes";
+
+export interface CatDocs_categorizeDocuments {
+  success: boolean;
+}
+
+export interface CatDocs {
+  categorizeDocuments: CatDocs_categorizeDocuments | null;
+}
+
+export interface CatDocsVariables {
+  input: CategorizeDocumentsInput;
+}
+
+        "#,
+        r#"
+
+export interface CategorizeDocumentsInput {
+  /**
+   * A unique identifier for the client performing the mutation.
+   */
+  clientMutationId: string | null;
+  document_categories: (DocumentCategoryInput)[];
+}
+
+/**
+ * Possible document categories
+ */
+export enum DocumentCategories {
+  WILL_OR_TRUST = "WILL_OR_TRUST",
+  APPLICATION = "APPLICATION",
+  BILL_OF_SALE = "BILL_OF_SALE",
+  COPY_CERTIFICATION = "COPY_CERTIFICATION",
+  COURT_ISSUED_DOCUMENT = "COURT_ISSUED_DOCUMENT",
+  DEEDS = "DEEDS",
+  DMV_FORM = "DMV_FORM",
+  I9 = "I9",
+  LEASE = "LEASE",
+  LENDER_PACKAGE = "LENDER_PACKAGE",
+  PS1583 = "PS1583",
+  POA = "POA",
+  TITLE_PACKAGE = "TITLE_PACKAGE",
+  VITAL_RECORDS_REQUEST = "VITAL_RECORDS_REQUEST",
+  CUSTOM = "CUSTOM",
+}
+
+export interface DocumentCategoryInput {
+  /**
+   * Category of the document
+   */
+  category: DocumentCategories;
+  /**
+   * String inputted if category is other or multiple
+   */
+  custom_category: string | null;
+  /**
+   * ID of the document to be categorized
+   */
+  document_id: string;
+}
+
+        "#,
+    );
+}
+
+#[test]
 fn compile_mutation_with_variables() {
     basic_success_with_global_types_assert(
         "
