@@ -11,10 +11,11 @@ pub mod schema;
 pub enum Error {
     FileError(std::io::Error),
     SchemaJSONParseError(schema::Error),
-    GraphqlFileParseError(graphql_parser::query::ParseError),
+    GraphqlFileParseError(PathBuf, graphql_parser::query::ParseError),
     OnlyImportFragments,
-    CompileError(super::typescript::Error),
-    OnlyOneOperationPerDocumentSupported,
+    CompileError(PathBuf, super::typescript::Error),
+    GlobalTypesCompileError(super::typescript::Error),
+    OnlyOneOperationPerDocumentSupported(PathBuf),
 }
 
 fn read_graphql_file(path: &PathBuf) -> std::io::Result<String> {
@@ -75,10 +76,12 @@ fn add_imported_fragments(
         let contents = read_graphql_file(&file_path).map_err(Error::FileError)?;
         file_path.pop();
         add_imported_fragments(&file_path, imports, &contents, root_dir)?;
-        let mut parsed =
-            graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
+        let mut parsed = graphql_parser::parse_query(&contents)
+            .map_err(|e| Error::GraphqlFileParseError(file_path.clone(), e))?;
         if parsed.definitions.len() != 1 {
-            return Err(Error::OnlyOneOperationPerDocumentSupported);
+            return Err(Error::OnlyOneOperationPerDocumentSupported(
+                file_path.clone(),
+            ));
         }
         for def in parsed.definitions.drain(0..1) {
             match def {
@@ -99,7 +102,8 @@ pub fn compile_file(
     root_dir: &PathBuf,
 ) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
-    let parsed = graphql_parser::parse_query(&contents).map_err(Error::GraphqlFileParseError)?;
+    let parsed = graphql_parser::parse_query(&contents)
+        .map_err(|e| Error::GraphqlFileParseError(path.clone(), e))?;
     let mut parsed_imported_fragments = HashMap::new();
     let mut parent_dir = path.clone();
     parent_dir.pop();
@@ -111,13 +115,13 @@ pub fn compile_file(
     )?;
 
     if parsed.definitions.len() != 1 {
-        return Err(Error::OnlyOneOperationPerDocumentSupported);
+        return Err(Error::OnlyOneOperationPerDocumentSupported(path.clone()));
     }
 
     let mut generated_dir_path = make_generated_dir(parent_dir)?;
     let the_compile =
         super::typescript::compile(&parsed.definitions[0], schema, parsed_imported_fragments)
-            .map_err(Error::CompileError)?;
+            .map_err(|error| Error::CompileError(path.clone(), error))?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
     generated_dir_path.pop();
@@ -133,8 +137,8 @@ pub fn compile_global_types_file(
         return Ok(());
     }
     let mut generated_dir_path = make_generated_dir(path.clone())?;
-    let the_compile =
-        super::typescript::compile_globals(schema, global_names).map_err(Error::CompileError)?;
+    let the_compile = super::typescript::compile_globals(schema, global_names)
+        .map_err(Error::GlobalTypesCompileError)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
     Ok(())
