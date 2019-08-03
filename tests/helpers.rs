@@ -24,7 +24,7 @@ pub fn qlc_command_with_fake_dir_and_schema() -> (Command, TempDir) {
 
 /// Similar predicate that ignores whitespace before and after the desired string
 pub fn similar(orig: &'static str) -> predicates::str::DifferencePredicate {
-    predicates::str::similar(orig.trim())
+    predicates::str::similar(format!("/* tslint:disable */\n/* eslint-disable */\n// This file was automatically generated and should not be edited.\n\n{}", orig.trim()))
 }
 
 pub fn assert_generated(dir: &TempDir, expected_file_name: &str, expected_content: &'static str) {

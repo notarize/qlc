@@ -9,6 +9,12 @@ mod fragment;
 mod operation;
 mod variable;
 
+const HEADER: &str = "/* tslint:disable */
+/* eslint-disable */
+// This file was automatically generated and should not be edited.
+
+";
+
 #[derive(Debug)]
 pub enum Error {
     UnknownError,
@@ -58,6 +64,7 @@ pub fn compile(
         query::Definition::Fragment(frag_def) => fragment::from_fragment(&mut ctx, frag_def),
     }?;
     let filename = format!("{}.ts", name);
+    let contents = format!("{}{}", HEADER, contents);
     Ok(Compile {
         filename,
         contents,
@@ -174,9 +181,10 @@ pub fn compile_globals(
     global_names: &HashSet<String>,
 ) -> Result<GlobalTypesCompile> {
     let types = global_types_from_names(schema, global_names)?;
+    let contents = format!("{}{}", HEADER, types.join("\n\n"));
     Ok(GlobalTypesCompile {
         filename: String::from("globalTypes.ts"),
-        contents: types.join("\n\n"),
+        contents,
     })
 }
 
