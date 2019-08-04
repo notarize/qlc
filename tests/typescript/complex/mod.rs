@@ -50,7 +50,7 @@ fragment testFragment on Viewer {
 
     assert_generated(
         &temp_dir,
-        "testQuery.ts",
+        "TestQuery.ts",
         "
 export interface TestQuery_viewer_user {
   firstName: string | null;
@@ -112,7 +112,7 @@ fragment testFragment on Viewer {
 
     assert_generated(
         &temp_dir,
-        "testQuery.ts",
+        "TestQuery.ts",
         "
 export interface TestQuery_viewer_user {
   id: string;
@@ -210,7 +210,7 @@ fragment absoluteUserFragmentTwo on User {
 
     assert_generated(
         &temp_dir,
-        "testQuery.ts",
+        "TestQuery.ts",
         r#"
 import { UserRole } from "__generated__/globalTypes";
 
@@ -368,7 +368,7 @@ fragment userFragmentTwo on User {
 
     assert_generated(
         &temp_dir,
-        "testQuery.ts",
+        "TestQuery.ts",
         r#"
 import { Feature, UserRole } from "__generated__/globalTypes";
 
