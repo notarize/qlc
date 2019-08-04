@@ -52,7 +52,11 @@ pub fn from_variable_defs(
     let mut types = Vec::new();
     for def in defs {
         let type_name = from_variable_type(ctx, &def.var_type, true)?;
-        let prop_line = format!("  {}: {};", def.name, type_name);
+        let prop_line = if let query::Type::NonNullType(_) = def.var_type {
+            format!("  {}: {};", def.name, type_name)
+        } else {
+            format!("  {}?: {};", def.name, type_name)
+        };
         fields.push(prop_line);
     }
     let variables_type = format!(

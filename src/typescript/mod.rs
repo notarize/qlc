@@ -96,7 +96,12 @@ fn input_def_from_type(input_type: &InputObjectType) -> Result<String> {
     for (name, field) in sorted {
         let doc = compile_documentation(&field.documentation, 2);
         let field_type = from_input_def_field_def(name, &field.type_description)?;
-        fields.push(format!("  {}{}: {};", doc, name, field_type));
+        let ts_field = if field.type_description.nullable {
+            format!("  {}{}?: {};", doc, name, field_type)
+        } else {
+            format!("  {}{}: {};", doc, name, field_type)
+        };
+        fields.push(ts_field);
     }
     Ok(format!(
         "export interface {} {{\n{}\n}}",

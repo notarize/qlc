@@ -68,7 +68,7 @@ export interface CategorizeDocumentsInput {
   /**
    * A unique identifier for the client performing the mutation.
    */
-  clientMutationId: string | null;
+  clientMutationId?: string | null;
   document_categories: (DocumentCategoryInput)[];
 }
 
@@ -101,7 +101,7 @@ export interface DocumentCategoryInput {
   /**
    * String inputted if category is other or multiple
    */
-  custom_category: string | null;
+  custom_category?: string | null;
   /**
    * ID of the document to be categorized
    */
@@ -146,27 +146,27 @@ export interface AddCheckmarkAnnotationVariables {
         "#,
         r#"
 export interface AddCheckmarkAnnotationInput {
-  annotation_designation_id: string | null;
-  author_id: string | null;
+  annotation_designation_id?: string | null;
+  author_id?: string | null;
   /**
    * A unique identifier for the client performing the mutation.
    */
-  clientMutationId: string | null;
-  document_bundle_id: string | null;
+  clientMutationId?: string | null;
+  document_bundle_id?: string | null;
   document_id: string;
   location: AnnotationLocationInput;
-  meeting_id: string | null;
-  review_session_id: string | null;
+  meeting_id?: string | null;
+  review_session_id?: string | null;
   size: SizeInput;
 }
 
 export interface AnnotationLocationInput {
   page: number;
-  page_type: PageTypes | null;
+  page_type?: PageTypes | null;
   /**
    * Top left coordinate
    */
-  point: PointInput | null;
+  point?: PointInput | null;
 }
 
 /**
