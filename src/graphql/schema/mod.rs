@@ -190,6 +190,7 @@ pub struct EnumType {
 pub struct InterfaceType {
     pub name: String,
     pub fields: FieldsLookup,
+    pub possible_types: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -275,8 +276,20 @@ impl Type {
             "SCALAR" => TypeDefinition::Scalar(json.name),
             "INTERFACE" => {
                 let name = json.name.clone();
+                let mut possible_types = json
+                    .possible_types
+                    .as_ref()
+                    .ok_or_else(|| Error::UnionMissingTypes(name.clone()))?
+                    .iter()
+                    .map(|pt| pt.name.clone())
+                    .collect::<Vec<_>>();
+                possible_types.sort_unstable();
                 let fields = get_fields_for_complex(json, true);
-                let interface_type = InterfaceType { name, fields };
+                let interface_type = InterfaceType {
+                    name,
+                    fields,
+                    possible_types,
+                };
                 TypeDefinition::Interface(interface_type)
             }
             "INPUT_OBJECT" => {

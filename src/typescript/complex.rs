@@ -128,17 +128,48 @@ fn compile_implementors(
     Ok(ts_interfaces)
 }
 
+fn get_type_name_descripton_for_interface<'a>(
+    interface_name: &str,
+    implementing_types: &HashMap<&String, (&TypeDefinition, Vec<&'a FieldIR>)>,
+) -> TypeNameDescription {
+    let union_implmentor = implementing_types
+        .values()
+        .find(|(type_def, _)| match type_def {
+            TypeDefinition::Interface(interface_type) => interface_type.name == interface_name,
+            _ => false,
+        });
+    union_implmentor
+        .map(|(_, sub_fields)| {
+            let mut names = HashSet::new();
+            for sub_field in sub_fields {
+                let name = sub_field.user_specified_name.clone();
+                if sub_field.field.name != "__typename" {
+                    continue;
+                }
+                names.insert(name);
+            }
+            TypeNameDescription {
+                aliases: names,
+                opt_possible_types: None,
+            }
+        })
+        .unwrap_or_else(|| TypeNameDescription {
+            aliases: HashSet::new(),
+            opt_possible_types: None,
+        })
+}
+
 fn get_type_name_descripton_for_union<'a>(
     union_name: &str,
     implementing_types: &HashMap<&String, (&TypeDefinition, Vec<&'a FieldIR>)>,
 ) -> Result<TypeNameDescription> {
-    let union_implemntor = implementing_types
+    let union_implmentor = implementing_types
         .values()
         .find(|(type_def, _)| match type_def {
             TypeDefinition::Union(union_type) => union_type.name == union_name,
             _ => false,
         });
-    let aliases = union_implemntor
+    let aliases = union_implmentor
         .map(|(_, sub_fields)| {
             let mut names = HashSet::new();
             for sub_field in sub_fields {
@@ -155,7 +186,28 @@ fn get_type_name_descripton_for_union<'a>(
             names.insert("__typename".to_string());
             Ok(names)
         })?;
-    Ok(TypeNameDescription { aliases })
+    Ok(TypeNameDescription {
+        aliases,
+        opt_possible_types: None,
+    })
+}
+
+fn combine_typename_descriptions(
+    base_desc: &TypeNameDescription,
+    fields: &[&FieldIR],
+) -> TypeNameDescription {
+    let mut from_fields = fields
+        .iter()
+        .filter(|field_ir| field_ir.field.name == "__typename")
+        .map(|field_ir| field_ir.user_specified_name.clone())
+        .collect::<HashSet<_>>();
+    for alias in base_desc.aliases.iter() {
+        from_fields.insert(alias.clone());
+    }
+    TypeNameDescription {
+        aliases: from_fields,
+        opt_possible_types: None,
+    }
 }
 
 fn compile_fields_ir(
@@ -208,11 +260,13 @@ fn compile_fields_ir(
                     implementing_types.get(type_name).map(|x| &x.1),
                 ) {
                     (TypeDefinition::Object(_), Some(sub_fields)) => {
+                        let combined =
+                            combine_typename_descriptions(&type_name_description, &sub_fields);
                         ts_interfaces.append(&mut compile_implementors(
                             ctx,
                             sub_fields,
                             &new_parent,
-                            Some(&type_name_description),
+                            Some(&combined),
                         )?);
                     }
                     (TypeDefinition::Object(_), None) => {
@@ -255,9 +309,11 @@ fn compile_fields_ir(
             }
             ts_interfaces.push(compile_sums_and_products(sum_types, product_types, parent)?);
         }
-        TypeDefinition::Interface(_) => {
+        TypeDefinition::Interface(interface_type) => {
             let mut sorted_implementing_type_names = implementing_types.keys().collect::<Vec<_>>();
             sorted_implementing_type_names.sort_unstable();
+            let type_name_description =
+                get_type_name_descripton_for_interface(&interface_type.name, &implementing_types);
             let mut sum_types = Vec::new();
             let mut product_types = Vec::new();
             for name in sorted_implementing_type_names {
@@ -270,18 +326,37 @@ fn compile_fields_ir(
                 match &type_def {
                     TypeDefinition::Object(_) => {
                         sum_types.push(compiled_name);
+                        let combined =
+                            combine_typename_descriptions(&type_name_description, &sub_fields);
+                        ts_interfaces.append(&mut compile_implementors(
+                            ctx,
+                            sub_fields,
+                            &new_parent,
+                            Some(&combined),
+                        )?);
                     }
-                    TypeDefinition::Interface(_) => {
+                    TypeDefinition::Interface(interface_type) => {
+                        if sub_fields.iter().all(|x| x.field.name == "__typename") {
+                            continue;
+                        }
+                        let typename_desc = TypeNameDescription {
+                            aliases: sub_fields
+                                .iter()
+                                .filter(|x| x.field.name == "__typename")
+                                .map(|x| x.user_specified_name.clone())
+                                .collect(),
+                            opt_possible_types: Some(interface_type.possible_types.clone()),
+                        };
                         product_types.push(compiled_name);
+                        ts_interfaces.append(&mut compile_implementors(
+                            ctx,
+                            sub_fields,
+                            &new_parent,
+                            Some(&typename_desc),
+                        )?);
                     }
                     _ => return Err(Error::UnknownError),
                 }
-                ts_interfaces.append(&mut compile_implementors(
-                    ctx,
-                    sub_fields,
-                    &new_parent,
-                    None,
-                )?);
             }
             ts_interfaces.push(compile_sums_and_products(sum_types, product_types, parent)?);
         }

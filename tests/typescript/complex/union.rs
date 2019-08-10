@@ -139,6 +139,7 @@ fn compile_union_with_typenames() {
 __typename
 as: __typename
 ... on CheckmarkAnnotation {
+  typername: __typename
   author_id
 }
 ... on TextAnnotation {
@@ -149,6 +150,7 @@ as: __typename
 export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation {
   __typename: "CheckmarkAnnotation";
   as: "CheckmarkAnnotation";
+  typername: "CheckmarkAnnotation";
   author_id: string;
 }
 

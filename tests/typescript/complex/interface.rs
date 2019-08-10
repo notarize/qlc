@@ -1,6 +1,43 @@
 use crate::helpers::basic_success_assert;
 
 #[test]
+fn compile_interface_with_typename() {
+    basic_success_assert(
+        "
+query TestQuery {
+  meeting: node {
+    __typename
+    as: __typename
+    ... on Meeting {
+      __typename
+      another: __typename
+      can_complete
+    }
+  }
+}
+        ",
+        "TestQuery.ts",
+        r#"
+export interface TestQuery_meeting_Meeting {
+  __typename: "Meeting";
+  another: "Meeting";
+  as: "Meeting";
+  can_complete: boolean;
+}
+
+export type TestQuery_meeting = TestQuery_meeting_Meeting;
+
+export interface TestQuery {
+  /**
+   * Fetches an object given its ID.
+   */
+  meeting: TestQuery_meeting | null;
+}
+        "#,
+    );
+}
+
+#[test]
 fn compile_interface_concrete_only_query() {
     basic_success_assert(
         "
