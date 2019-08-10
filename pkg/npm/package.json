@@ -1,0 +1,37 @@
+{
+  "name": "@notarize/qlc-cli",
+  "version": "QLC_VERSION",
+  "author": "Notarize Inc.",
+  "license": "MIT",
+  "description": "A module for using QLC in a Node project",
+  "main": "lib/index.js",
+  "bin": {
+    "qlc": "bin/qlc"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/notarize/qlc.git"
+  },
+  "keywords": [
+    "gql",
+    "generator",
+    "types",
+    "interfaces",
+    "graphql",
+    "codegen",
+    "apollo",
+    "typescript",
+    "ts",
+    "typings"
+  ],
+  "bugs": {
+    "url": "https://github.com/notarize/qlc/issues"
+  },
+  "homepage": "https://github.com/notarize/qlc",
+  "scripts": {
+    "postinstall": "node ./lib/postinstall.js"
+  }
+}

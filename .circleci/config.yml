@@ -15,6 +15,23 @@ executors:
     environment:
       CARGO_HOME: /root/notarize/qlc/.cargo
 
+  cross_compiling_host:
+    docker:
+      - image: notarize/cross-rust:1.36.0-stretch
+    working_directory: /root/notarize/qlc
+    environment:
+      CARGO_HOME: /root/notarize/qlc/.cargo
+
+  github_api_client:
+    docker:
+      - image: notarize/github-api-client:ghr-0.12.2
+    working_directory: /root/notarize/qlc
+
+  node_env:
+    docker:
+      - image: notarize/node:10.14.0
+    working_directory: /root/notarize/qlc
+
 jobs:
   cargo_init:
     executor: default_rust_compiler
@@ -70,6 +87,72 @@ jobs:
           name: Testing
           command: cargo test -- --test-threads=7
 
+  build_release_bin:
+    executor: cross_compiling_host
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Building OS X
+          command: cargo build --release --target=x86_64-apple-darwin
+          environment:
+            CC: o64-clang
+            CXX: o64-clang++
+            LIBZ_SYS_STATIC: 1
+      - run:
+          name: Building Linux Musl
+          command: cargo build --release --target=x86_64-unknown-linux-musl
+      - persist_to_workspace:
+          root: /root/notarize
+          paths:
+            - qlc/target/x86_64-apple-darwin/release
+            - qlc/target/x86_64-unknown-linux-musl/release
+
+  create_github_release:
+    executor: github_api_client
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Making GitHub Release
+          command: |
+            mkdir -p archives
+
+            LINUX_MUSL="x86_64-unknown-linux-musl"
+            cd "$CIRCLE_WORKING_DIRECTORY/target/$LINUX_MUSL/release"
+            VERSION=$(./qlc --version | sed 's/QL Compiler //g')
+            tar czf "qlc-$VERSION-$LINUX_MUSL.tar.gz" qlc
+            mv "qlc-$VERSION-$LINUX_MUSL.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
+
+            MAC_OSX="x86_64-apple-darwin"
+            cd "$CIRCLE_WORKING_DIRECTORY/target/$MAC_OSX/release"
+            tar czf "qlc-$VERSION-$MAC_OSX.tar.gz" qlc
+            mv "qlc-$VERSION-$MAC_OSX.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
+
+            cd "$CIRCLE_WORKING_DIRECTORY"
+            ls -l archives
+            ghr \
+              -t "$GITHUB_TOKEN" \
+              -n "v$VERSION" \
+              -c "$CIRCLE_SHA1" \
+              -delete \
+              "$VERSION" archives
+
+  create_npm_release:
+    executor: node_env
+    steps:
+      - attach_made_workspace
+      - run:
+          name: Configuring NPM Token
+          command: |
+            echo "registry=https://registry.npmjs.org/" > ~/.npmrc
+            echo "//registry.npmjs.org/:_authToken=${NOTARBOT_NPM_TOKEN}" >> ~/.npmrc
+      - run:
+          name: Publishing Package
+          command: |
+            VERSION=$(./target/x86_64-unknown-linux-musl/release/qlc --version | sed 's/QL Compiler //g')
+            cd pkg/npm
+            sed -i "s/QLC_VERSION/$VERSION/g" package.json
+            yarn publish --new-version "$VERSION" --access public
+
 workflows:
   version: 2
   Everything:
@@ -99,3 +182,26 @@ workflows:
           filters:
             branches:
               ignore: master
+
+      - build_release_bin:
+          requires:
+            - test
+            - lint
+            - fmt
+          filters:
+            branches:
+              only: production
+
+      - create_github_release:
+          requires:
+            - build_release_bin
+          filters:
+            branches:
+              only: production
+
+      - create_npm_release:
+          requires:
+            - create_github_release
+          filters:
+            branches:
+              only: production
