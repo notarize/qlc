@@ -234,7 +234,10 @@ fn compile_fields_ir(
         .ok_or_else(|| Error::MissingType(parent.type_name.to_string()))?;
     match &parent_type.definition {
         TypeDefinition::Object(_) => match implementing_types.get(&parent.type_name) {
-            None => {}
+            // TODO this isn't quite correct... we might need to generate interface implemntations...
+            None => {
+                ts_interfaces.append(&mut compile_implementors(ctx, &[], &parent, None)?);
+            }
             Some((_, sub_fields)) => {
                 ts_interfaces.append(&mut compile_implementors(ctx, sub_fields, &parent, None)?);
             }
