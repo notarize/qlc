@@ -9,6 +9,7 @@
     "qlc": "bin/qlc"
   },
   "files": [
+    "bin",
     "lib"
   ],
   "repository": {

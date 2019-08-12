@@ -133,7 +133,6 @@ jobs:
               -t "$GITHUB_TOKEN" \
               -n "v$VERSION" \
               -c "$CIRCLE_SHA1" \
-              -delete \
               "$VERSION" archives
 
   create_npm_release:
