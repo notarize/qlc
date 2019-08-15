@@ -1,48 +1,80 @@
-# QL Compiler
+👌 QL Compiler (qlc)
+--------------------
 
-The QL compiler `qlc` is a super fast and fun codegenerator for GraphQL clients. Specifically, it is capable of
-reading `.graphql` queries, mutations, and fragment files and combining this with introspection schema JSON to
-produce ad-hoc type defintions for TypeScript. Its similar to tools the [Apollo Tooling CLI](https://github.com/apollographql/apollo-tooling)
+The QL compiler is a fun codegenerator for GraphQL clients. Specifically, it is capable of
+reading `.graphql` query, mutation, and fragment files and combining this with schema introspection JSON to
+produce ad-hoc type defintions for TypeScript. Its similar to the tools [Apollo Tooling CLI](https://github.com/apollographql/apollo-tooling)
 and [GraphQL Code Generator](https://github.com/dotansimha/graphql-code-generator), but smaller in scope
 (and much faster).
 
-## Example
+### Motivating Example
 
 Say you have a query that looks like this:
 
 ```graphql
-query MyQuery {
-  comment {
+query CommentQuery($id: ID!) {
+  comment(id: $id) {
     author {
       name
+      avatar: profilePictureUrl
     }
     content
   }
 }
 ```
 
-Using qlc would enable you to codegen the following TypeScript file easily:
+If you are using TypeScript and a GraphQL client, it would be useful to get the type of this query. You could
+write one out by hand (and then maintain this defintion as the query changes). But since GraphQL supports
+intropsection and has a schema, we already know the type for the above! `qlc` enables you to automate the
+codegen of the following types:
 
 ```ts
-export interface MyQuery_comment_author {
-  name: string | null;
+export interface CommentQuery_comment_author {
+  name: string;
+  avatar: string | null;
 }
 
-export interface MyQuery_comment {
-  author: MyQuery_comment_author;
+export interface CommentQuery_comment {
+  author: CommentQuery_comment_author;
   content: string;
 }
 
-export interface MyQuery {
-  comment: MyQuery_comment;
+export interface CommentQuery {
+  comment: CommentQuery_comment;
+}
+
+export interface CommentQueryVariables {
+  id: string;
 }
 ```
 
-## Usage
+### Usage
 
-You can use the binary as is see `--help` for various CLI options (there are not many). Additionally,
-since you are likely using this from a node project, there is a convience NPM package available.
+You can download the latest binaries (currently available for linux and macos) on the
+[releases](https://github.com/notarize/qlc/releases) page.
+
+For convenience, its also availabele as an NPM package:
 
 ```sh
-yarn add @notarize/qlc-cli
+$ yarn add @notarize/qlc-cli
+$ yarn run qlc --help
 ```
+
+`qlc` will recursively scan directories, finding `.graphql` files and produce `.ts` files in the same
+modules under a `__generated__` submodule. By default, it starts at the working directory but you can
+optionally provide it a directory argument. You will need to supply `qlc` with the JSON result of
+_the_ introspection query. Most, if not all, GraphQL servers support producing this query result and
+the canonical implementation can even be found in the official [graphql](https://www.npmjs.com/package/graphql)
+NPM package. See [this blog post](https://blog.apollographql.com/three-ways-to-represent-your-graphql-schema-a41f4175100d)
+for more information.
+
+### Benchmarking
+
+How much faster is "faster"? All results below are collected on MacOS, 2.8 GHz quad-core machine with 
+an NVMe storage device, with the operating system's IO cache hot. The directory in question has 4241 files
+and 265 `.graphql` files.
+
+| Tool | Version | Command | Time (Wall Clock) |
+| ---- | ------- | ------- | ----------------- |
+| qlc | 0.1.1 | `qlc src -s src/graph_artifacts/schema.json` | 0.074 sec |
+| apollo | 2.12.5 (node 10.14.0) | `apollo client:codegen --addTypename --target=typescript` | 1 min 33.77 sec |
