@@ -19,7 +19,7 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
             Arg::with_name("rootdir")
                 .value_name("DIR")
                 .default_value(".")
-                .help("Directory to compile"),
+                .help("Directory to recursively compile"),
         )
         .arg(
             Arg::with_name("schemapath")
@@ -27,7 +27,7 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
                 .short("s")
                 .long("schema-file")
                 .takes_value(true)
-                .help("Path of schema introspection JSON file"),
+                .help("Path of schema introspection JSON file (defaults to DIR/schema.json)"),
         )
         .arg(
             Arg::with_name("nthreads")
@@ -35,7 +35,7 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .validator(|val| val.parse::<u8>().map(|_| ()).map_err(|err| err.to_string()))
-                .help("Sets the number of threads"),
+                .help("Sets the number of threads (defaults to number of CPU cores)"),
         )
         .get_matches()
 }
