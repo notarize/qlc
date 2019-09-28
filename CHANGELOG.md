@@ -1,3 +1,17 @@
+## [0.2.0](https://github.com/notarize/qlc/compare/0.1.2...0.2.0)
+
+### Features
+
+- Add `--use-custom-scalars` argument
+
+### Bugfixes
+
+- Add support for Node v8
+
+### Chores
+
+- Upgrade to Rust 1.38.0
+
 ## [0.1.2](https://github.com/notarize/qlc/compare/0.1.1...0.1.2)
 
 ### Features
