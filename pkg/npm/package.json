@@ -5,6 +5,9 @@
   "license": "MIT",
   "description": "A module for using QLC in a Node project",
   "main": "lib/index.js",
+  "engines": {
+    "node": ">= 8.9.0"
+  },
   "bin": {
     "qlc": "bin/qlc"
   },

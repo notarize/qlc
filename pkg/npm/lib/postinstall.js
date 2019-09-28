@@ -2,6 +2,7 @@
 
 const os = require("os");
 const fs = require("fs");
+const url = require("url");
 const https = require("https");
 const path = require("path");
 const util = require("util");
@@ -26,7 +27,7 @@ function getTarget() {
   }
 }
 
-function download(url, dest) {
+function download(fullUrl, dest) {
   return new Promise((resolve, reject) => {
     const outFile = fs.createWriteStream(dest);
     const cleanup = (err) => fsUnlink(dest)
@@ -34,8 +35,11 @@ function download(url, dest) {
       .finally(() => {
         reject(err);
       });
-    const headers = { Accept: "application/octet-stream" };
-    https.get(url, { headers }, (response) => {
+    const opts = {
+      ...url.parse(fullUrl),
+      headers: { Accept: "application/octet-stream" },
+    };
+    https.get(opts, (response) => {
       if (response.statusCode === 302) {
         return download(response.headers.location, dest)
           .then(resolve).catch(reject);
