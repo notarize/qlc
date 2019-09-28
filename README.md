@@ -66,7 +66,8 @@ optionally provide it a directory argument. You will need to supply `qlc` with t
 _the_ introspection query. Most, if not all, GraphQL servers support producing this query result, and
 the canonical implementation can even be found in the official [graphql](https://www.npmjs.com/package/graphql)
 NPM package. See [this blog post](https://blog.apollographql.com/three-ways-to-represent-your-graphql-schema-a41f4175100d)
-for more information.
+for more information as well as [this gist](https://gist.github.com/dairyisscary/5d6f0a240593560c7a0a4db08df52e36)
+for an example of how to download a schema.
 
 ### Benchmarking
 
