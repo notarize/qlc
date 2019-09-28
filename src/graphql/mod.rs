@@ -100,6 +100,7 @@ pub fn compile_file(
     path: &PathBuf,
     schema: &Schema,
     root_dir: &PathBuf,
+    use_custom_scalars: bool,
 ) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
     let parsed = graphql_parser::parse_query(&contents)
@@ -119,9 +120,13 @@ pub fn compile_file(
     }
 
     let mut generated_dir_path = make_generated_dir(parent_dir)?;
-    let the_compile =
-        super::typescript::compile(&parsed.definitions[0], schema, parsed_imported_fragments)
-            .map_err(|error| Error::CompileError(path.clone(), error))?;
+    let the_compile = super::typescript::compile(
+        &parsed.definitions[0],
+        schema,
+        parsed_imported_fragments,
+        use_custom_scalars,
+    )
+    .map_err(|error| Error::CompileError(path.clone(), error))?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;
     generated_dir_path.pop();
@@ -132,12 +137,13 @@ pub fn compile_global_types_file(
     path: &PathBuf,
     schema: &Schema,
     global_names: &HashSet<String>,
+    use_custom_scalars: bool,
 ) -> Result<(), Error> {
     if global_names.is_empty() {
         return Ok(());
     }
     let mut generated_dir_path = make_generated_dir(path.clone())?;
-    let the_compile = super::typescript::compile_globals(schema, global_names)
+    let the_compile = super::typescript::compile_globals(schema, global_names, use_custom_scalars)
         .map_err(Error::GlobalTypesCompileError)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;

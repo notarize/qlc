@@ -7,6 +7,7 @@ use std::path::PathBuf;
 pub struct Config {
     pub root_dir: PathBuf,
     pub schema_path: PathBuf,
+    pub use_custom_scalars: bool,
     pub number_threads: u8,
 }
 
@@ -16,18 +17,23 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
         .author(crate_authors!())
         .about("\nQL Compiler (qlc) compiles type definitions from graphql and introspection JSON.")
         .arg(
-            Arg::with_name("rootdir")
+            Arg::with_name("root_dir")
                 .value_name("DIR")
                 .default_value(".")
                 .help("Directory to recursively compile"),
         )
         .arg(
-            Arg::with_name("schemapath")
+            Arg::with_name("schema_path")
                 .value_name("FILE")
                 .short("s")
                 .long("schema-file")
                 .takes_value(true)
                 .help("Path of schema introspection JSON file (defaults to DIR/schema.json)"),
+        )
+        .arg(
+            Arg::with_name("use_custom_scalars")
+                .long("use-custom-scalars")
+                .help("Use custom schema defined scalar names for types instead of any type"),
         )
         .arg(
             Arg::with_name("nthreads")
@@ -43,8 +49,9 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
 impl Config {
     pub fn from_cli() -> Self {
         let matches = cli_parse();
-        let root_dir = PathBuf::from(matches.value_of("rootdir").unwrap());
-        let schema_path = match matches.value_of("schemapath") {
+        let root_dir = PathBuf::from(matches.value_of("root_dir").unwrap());
+        let use_custom_scalars = matches.is_present("use_custom_scalars");
+        let schema_path = match matches.value_of("schema_path") {
             Some(value) => PathBuf::from(value),
             None => {
                 let mut path = root_dir.clone();
@@ -55,6 +62,7 @@ impl Config {
         Config {
             root_dir,
             schema_path,
+            use_custom_scalars,
             number_threads: matches
                 .value_of("nthreads")
                 .and_then(|st| st.parse().ok())

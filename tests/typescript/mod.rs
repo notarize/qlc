@@ -2,6 +2,7 @@ use crate::helpers::basic_success_assert;
 
 mod complex;
 mod enumeration;
+mod field;
 mod variable;
 
 #[test]

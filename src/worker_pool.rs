@@ -50,15 +50,22 @@ impl Work {
         Ok(more_work)
     }
 
-    fn run(&self, schema: &Arc<Schema>, root_dir: &Arc<PathBuf>) -> WorkResult {
+    fn run(
+        &self,
+        schema: &Arc<Schema>,
+        root_dir: &Arc<PathBuf>,
+        use_custom_scalars: bool,
+    ) -> WorkResult {
         match self {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
                 .map(SuccessWorkResult::MoreWork)
                 .map_err(Error::IO),
-            Work::GraphQL(path) => super::graphql::compile_file(path, schema, root_dir)
-                .map(SuccessWorkResult::MoreGlobalTypes)
-                .map_err(Error::GraphQL),
+            Work::GraphQL(path) => {
+                super::graphql::compile_file(path, schema, root_dir, use_custom_scalars)
+                    .map(SuccessWorkResult::MoreGlobalTypes)
+                    .map_err(Error::GraphQL)
+            }
         }
     }
 }
@@ -75,12 +82,13 @@ struct Worker {
     num_quitting: Arc<AtomicU8>,
     tx: channel::Sender<Message>,
     rx: channel::Receiver<Message>,
+    use_custom_scalars: bool,
 }
 
 impl Worker {
     fn run(mut self) {
         while let Some(work) = self.pop_work() {
-            match work.run(&self.schema, &self.root_dir) {
+            match work.run(&self.schema, &self.root_dir, self.use_custom_scalars) {
                 Ok(SuccessWorkResult::MoreGlobalTypes(globals)) => {
                     let mut self_globals = self.global_types.lock().unwrap();
                     for global in globals {
@@ -184,7 +192,7 @@ impl WorkerPool {
         }
     }
 
-    pub fn work(&self, root_dir: &PathBuf) -> Result<(), Vec<Error>> {
+    pub fn work(&self, root_dir: &PathBuf, use_custom_scalars: bool) -> Result<(), Vec<Error>> {
         let threads = self.num_workers;
         let global_types = Arc::new(Mutex::new(HashSet::new()));
         let errors = Arc::new(Mutex::new(Vec::new()));
@@ -209,6 +217,7 @@ impl WorkerPool {
                 is_waiting: false,
                 tx: tx.clone(),
                 rx: rx.clone(),
+                use_custom_scalars,
             };
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
@@ -224,9 +233,12 @@ impl WorkerPool {
             .map_err(|_| vec![Error::CleanupError])?
             .into_inner()
             .map_err(|_| vec![Error::CleanupError])?;
-        if let Err(global_type_error) =
-            graphql::compile_global_types_file(root_dir, &self.schema, &global_types)
-        {
+        if let Err(global_type_error) = graphql::compile_global_types_file(
+            root_dir,
+            &self.schema,
+            &global_types,
+            use_custom_scalars,
+        ) {
             errors.push(Error::GraphQL(global_type_error));
         }
         if errors.is_empty() {

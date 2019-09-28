@@ -44,7 +44,11 @@ fn compile_field_type(
                 let type_literal = format!("\"{}\"", parent.type_name);
                 (type_literal.clone(), type_literal)
             } else {
-                (compile_scalar(&sc_type), compile_scalar(&sc_type))
+                let use_custom_scalars = ctx.use_custom_scalars;
+                (
+                    compile_scalar(&sc_type, use_custom_scalars),
+                    compile_scalar(&sc_type, use_custom_scalars),
+                )
             }
         }
         FieldTypeDefinition::InputObject(name) => {
@@ -132,11 +136,17 @@ pub fn compile_ts_fields<'a>(
     Ok(ts_fields)
 }
 
-pub fn compile_scalar(scalar: &ScalarType) -> String {
+pub fn compile_scalar(scalar: &ScalarType, use_custom_scalars: bool) -> String {
     match scalar {
         ScalarType::Boolean => String::from("boolean"),
         ScalarType::String | ScalarType::ID => String::from("string"),
         ScalarType::Float | ScalarType::Int => String::from("number"),
-        ScalarType::Custom(_) => String::from("any"),
+        ScalarType::Custom(name) => {
+            if use_custom_scalars {
+                name.clone()
+            } else {
+                String::from("any")
+            }
+        }
     }
 }
