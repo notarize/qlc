@@ -1,3 +1,9 @@
+## [0.3.0](https://github.com/notarize/qlc/compare/0.2.0...0.3.0)
+
+### Features
+
+- Add `--custom-scalar-prefix` argument
+
 ## [0.2.0](https://github.com/notarize/qlc/compare/0.1.2...0.2.0)
 
 ### Features
