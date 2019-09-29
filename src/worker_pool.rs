@@ -1,5 +1,6 @@
-use super::graphql;
+use super::cli::RuntimeConfig;
 use super::graphql::schema::Schema;
+use super::graphql::{compile_file, compile_global_types_file, CompileConfig};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -17,7 +18,7 @@ enum Message {
 #[derive(Debug)]
 pub enum Error {
     CleanupError,
-    GraphQL(graphql::Error),
+    GraphQL(super::graphql::Error),
     IO(std::io::Error),
 }
 
@@ -50,30 +51,21 @@ impl Work {
         Ok(more_work)
     }
 
-    fn run(
-        &self,
-        schema: &Arc<Schema>,
-        root_dir: &Arc<PathBuf>,
-        use_custom_scalars: bool,
-    ) -> WorkResult {
+    fn run(&self, config: &CompileConfig, schema: &Arc<Schema>) -> WorkResult {
         match self {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
                 .map(SuccessWorkResult::MoreWork)
                 .map_err(Error::IO),
-            Work::GraphQL(path) => {
-                super::graphql::compile_file(path, schema, root_dir, use_custom_scalars)
-                    .map(SuccessWorkResult::MoreGlobalTypes)
-                    .map_err(Error::GraphQL)
-            }
+            Work::GraphQL(path) => compile_file(path, config, schema)
+                .map(SuccessWorkResult::MoreGlobalTypes)
+                .map_err(Error::GraphQL),
         }
     }
 }
 
 struct Worker {
-    threads: u8,
     schema: Arc<Schema>,
-    root_dir: Arc<PathBuf>,
     is_waiting: bool,
     is_quitting: bool,
     global_types: Arc<Mutex<HashSet<String>>>,
@@ -82,13 +74,14 @@ struct Worker {
     num_quitting: Arc<AtomicU8>,
     tx: channel::Sender<Message>,
     rx: channel::Receiver<Message>,
-    use_custom_scalars: bool,
+    config: Arc<RuntimeConfig>,
 }
 
 impl Worker {
     fn run(mut self) {
+        let compile_config = CompileConfig::from(&*self.config);
         while let Some(work) = self.pop_work() {
-            match work.run(&self.schema, &self.root_dir, self.use_custom_scalars) {
+            match work.run(&compile_config, &self.schema) {
                 Ok(SuccessWorkResult::MoreGlobalTypes(globals)) => {
                     let mut self_globals = self.global_types.lock().unwrap();
                     for global in globals {
@@ -122,22 +115,24 @@ impl Worker {
                     loop {
                         let nwait = self.num_waiting();
                         let nquit = self.num_quitting();
+                        let threads = self.config.thread_count();
                         // If the number of waiting workers dropped, then abort our attempt to quit.
                         // Sometimes work will come back.
-                        if nwait < self.threads {
+                        if nwait < threads {
                             break;
                         }
                         // If all workers are in this quit loop, then we can stop.
-                        if nquit == self.threads {
+                        if nquit == threads {
                             return None;
                         }
                     }
                 }
                 Err(_) => {
+                    let threads = self.config.thread_count();
                     self.set_waiting(true);
                     self.set_quitting(false);
-                    if self.num_waiting() == self.threads {
-                        for _ in 0..self.threads {
+                    if self.num_waiting() == threads {
+                        for _ in 0..threads {
                             self.tx.send(Message::Quit).unwrap();
                         }
                     } else {
@@ -180,34 +175,30 @@ impl Worker {
 }
 
 pub struct WorkerPool {
-    num_workers: u8,
+    config: Arc<RuntimeConfig>,
     schema: Arc<Schema>,
 }
 
 impl WorkerPool {
-    pub fn new(num_workers: u8, schema: Schema) -> Self {
+    pub fn new(config: RuntimeConfig, schema: Schema) -> Self {
         WorkerPool {
-            num_workers,
+            config: Arc::new(config),
             schema: Arc::new(schema),
         }
     }
 
-    pub fn work(&self, root_dir: &PathBuf, use_custom_scalars: bool) -> Result<(), Vec<Error>> {
-        let threads = self.num_workers;
+    pub fn work(&self) -> Result<(), Vec<Error>> {
         let global_types = Arc::new(Mutex::new(HashSet::new()));
         let errors = Arc::new(Mutex::new(Vec::new()));
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicU8::new(0));
         let num_quitting = Arc::new(AtomicU8::new(0));
-        let shared_root_dir = Arc::new(root_dir.clone());
         let mut handles = vec![];
-        let initial_work = Work::DirEntry(root_dir.clone());
+        let initial_work = Work::DirEntry(self.config.root_dir_path().clone());
         let root = Message::Work(initial_work);
         tx.send(root).unwrap();
-        for _ in 0..threads {
+        for _ in 0..self.config.thread_count() {
             let worker = Worker {
-                threads,
-                root_dir: shared_root_dir.clone(),
                 errors: errors.clone(),
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
@@ -217,7 +208,7 @@ impl WorkerPool {
                 is_waiting: false,
                 tx: tx.clone(),
                 rx: rx.clone(),
-                use_custom_scalars,
+                config: self.config.clone(),
             };
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
@@ -233,11 +224,11 @@ impl WorkerPool {
             .map_err(|_| vec![Error::CleanupError])?
             .into_inner()
             .map_err(|_| vec![Error::CleanupError])?;
-        if let Err(global_type_error) = graphql::compile_global_types_file(
-            root_dir,
+        if let Err(global_type_error) = compile_global_types_file(
+            &self.config.root_dir_path(),
+            &CompileConfig::from(&*self.config),
             &self.schema,
             &global_types,
-            use_custom_scalars,
         ) {
             errors.push(Error::GraphQL(global_type_error));
         }

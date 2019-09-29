@@ -10,9 +10,9 @@ mod typescript;
 mod worker_pool;
 
 fn main() {
-    let config = cli::Config::from_cli();
-    let schema = graphql::parse_schema(&config.schema_path).expect("Failed to parse schema");
-    let worker_pool = worker_pool::WorkerPool::new(config.number_threads, schema);
-    let result = worker_pool.work(&config.root_dir, config.use_custom_scalars);
+    let config = cli::RuntimeConfig::from_cli();
+    let schema = graphql::parse_schema(&config.schema_file_path()).expect("Failed to parse schema");
+    let worker_pool = worker_pool::WorkerPool::new(config, schema);
+    let result = worker_pool.work();
     cli::print_work_result(result);
 }

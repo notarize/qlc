@@ -1,3 +1,4 @@
+use super::cli::RuntimeConfig;
 use graphql_parser::query::{Definition, FragmentDefinition};
 use schema::Schema;
 use std::collections::{HashMap, HashSet};
@@ -6,6 +7,28 @@ use std::io::{BufReader, Read};
 use std::path::PathBuf;
 
 pub mod schema;
+
+#[derive(Debug)]
+pub enum BottomTypeConfig {
+    UseBottomType,
+    UseRealName,
+    UseRealNameWithPrefix(String),
+}
+
+#[derive(Debug)]
+pub struct CompileConfig {
+    root_dir: PathBuf,
+    pub bottom_type_config: BottomTypeConfig,
+}
+
+impl From<&RuntimeConfig> for CompileConfig {
+    fn from(from: &RuntimeConfig) -> Self {
+        CompileConfig {
+            root_dir: from.root_dir_path().clone(),
+            bottom_type_config: from.bottom_type_config(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -98,9 +121,8 @@ fn add_imported_fragments(
 
 pub fn compile_file(
     path: &PathBuf,
+    config: &CompileConfig,
     schema: &Schema,
-    root_dir: &PathBuf,
-    use_custom_scalars: bool,
 ) -> Result<HashSet<String>, Error> {
     let contents = read_graphql_file(path).map_err(Error::FileError)?;
     let parsed = graphql_parser::parse_query(&contents)
@@ -112,7 +134,7 @@ pub fn compile_file(
         &parent_dir,
         &mut parsed_imported_fragments,
         &contents,
-        root_dir,
+        &config.root_dir,
     )?;
 
     if parsed.definitions.len() != 1 {
@@ -122,9 +144,9 @@ pub fn compile_file(
     let mut generated_dir_path = make_generated_dir(parent_dir)?;
     let the_compile = super::typescript::compile(
         &parsed.definitions[0],
+        config,
         schema,
         parsed_imported_fragments,
-        use_custom_scalars,
     )
     .map_err(|error| Error::CompileError(path.clone(), error))?;
     generated_dir_path.push(the_compile.filename);
@@ -135,15 +157,15 @@ pub fn compile_file(
 
 pub fn compile_global_types_file(
     path: &PathBuf,
+    config: &CompileConfig,
     schema: &Schema,
     global_names: &HashSet<String>,
-    use_custom_scalars: bool,
 ) -> Result<(), Error> {
     if global_names.is_empty() {
         return Ok(());
     }
     let mut generated_dir_path = make_generated_dir(path.clone())?;
-    let the_compile = super::typescript::compile_globals(schema, global_names, use_custom_scalars)
+    let the_compile = super::typescript::compile_globals(config, schema, global_names)
         .map_err(Error::GlobalTypesCompileError)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(Error::FileError)?;

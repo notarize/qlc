@@ -1,4 +1,5 @@
 use super::graphql::schema::*;
+use super::graphql::CompileConfig;
 use field::{compile_documentation, compile_scalar};
 use graphql_parser::query;
 use std::collections::{HashMap, HashSet};
@@ -55,11 +56,11 @@ pub struct Parent {
 
 pub fn compile(
     definition: &query::Definition,
+    config: &CompileConfig,
     schema: &Schema,
     imported_fragments: HashMap<String, query::FragmentDefinition>,
-    use_custom_scalars: bool,
 ) -> Result<Compile> {
-    let mut ctx = CompileContext::new(schema, imported_fragments, use_custom_scalars);
+    let mut ctx = CompileContext::new(config, schema, imported_fragments);
     let (name, contents) = match definition {
         query::Definition::Operation(op_def) => operation::from_operation(&mut ctx, op_def),
         query::Definition::Fragment(frag_def) => fragment::from_fragment(&mut ctx, frag_def),
@@ -74,16 +75,16 @@ pub fn compile(
 }
 
 fn from_input_def_field_def(
+    config: &CompileConfig,
     field_name: &str,
     field_type: &FieldType,
-    use_custom_scalars: bool,
 ) -> Result<String> {
     let output = match &field_type.definition {
         FieldTypeDefinition::List(sub_field) => {
-            let inner_str = from_input_def_field_def(field_name, &sub_field, use_custom_scalars)?;
+            let inner_str = from_input_def_field_def(config, field_name, &sub_field)?;
             format!("({})[]", inner_str)
         }
-        FieldTypeDefinition::Scalar(sc_type) => compile_scalar(&sc_type, use_custom_scalars),
+        FieldTypeDefinition::Scalar(sc_type) => compile_scalar(config, &sc_type),
         FieldTypeDefinition::Enum(enum_type) => enum_type.to_string(),
         FieldTypeDefinition::InputObject(name) => name.to_string(),
         _ => return Err(Error::InvalidFieldDef(field_name.to_string())),
@@ -94,14 +95,13 @@ fn from_input_def_field_def(
     Ok(output)
 }
 
-fn input_def_from_type(input_type: &InputObjectType, use_custom_scalars: bool) -> Result<String> {
+fn input_def_from_type(config: &CompileConfig, input_type: &InputObjectType) -> Result<String> {
     let mut fields = Vec::new();
     let mut sorted = input_type.fields.iter().collect::<Vec<(&String, &Field)>>();
     sorted.sort_unstable_by_key(|item| item.0);
     for (name, field) in sorted {
         let doc = compile_documentation(&field.documentation, 2);
-        let field_type =
-            from_input_def_field_def(name, &field.type_description, use_custom_scalars)?;
+        let field_type = from_input_def_field_def(config, name, &field.type_description)?;
         let ts_field = if field.type_description.nullable {
             format!("  {}{}?: {};", doc, name, field_type)
         } else {
@@ -170,9 +170,9 @@ fn add_sub_input_object_field<'a>(
 }
 
 fn global_types_from_names(
+    config: &CompileConfig,
     schema: &Schema,
     global_names: &HashSet<String>,
-    use_custom_scalars: bool,
 ) -> Result<Vec<String>> {
     // We want to add names that are referenced by input objects, recursively.
     let mut name_to_type = HashMap::with_capacity(global_names.len());
@@ -196,7 +196,7 @@ fn global_types_from_names(
                 ));
             }
             TypeDefinition::InputObject(input_object_type) => {
-                types.push(input_def_from_type(input_object_type, use_custom_scalars)?);
+                types.push(input_def_from_type(config, input_object_type)?);
             }
             _ => return Err(Error::NotGlobalType(name.to_string())),
         }
@@ -205,11 +205,11 @@ fn global_types_from_names(
 }
 
 pub fn compile_globals(
+    config: &CompileConfig,
     schema: &Schema,
     global_names: &HashSet<String>,
-    use_custom_scalars: bool,
 ) -> Result<GlobalTypesCompile> {
-    let types = global_types_from_names(schema, global_names, use_custom_scalars)?;
+    let types = global_types_from_names(config, schema, global_names)?;
     let contents = format!("{}{}", HEADER, types.join("\n\n"));
     Ok(GlobalTypesCompile {
         filename: String::from("globalTypes.ts"),
@@ -218,23 +218,23 @@ pub fn compile_globals(
 }
 
 pub struct CompileContext<'a> {
+    config: &'a CompileConfig,
     schema: &'a Schema,
     global_types: HashSet<String>,
     imported_fragments: HashMap<String, query::FragmentDefinition>,
-    use_custom_scalars: bool,
 }
 
 impl<'a> CompileContext<'a> {
     fn new(
+        config: &'a CompileConfig,
         schema: &'a Schema,
         imported_fragments: HashMap<String, query::FragmentDefinition>,
-        use_custom_scalars: bool,
     ) -> Self {
         CompileContext {
+            config,
             schema,
             global_types: HashSet::new(),
             imported_fragments,
-            use_custom_scalars,
         }
     }
 

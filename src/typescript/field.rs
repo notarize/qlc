@@ -1,6 +1,7 @@
 use super::complex::FieldIR;
 use super::{CompileContext, Error, Parent, Result, Typescript};
 use crate::graphql::schema::{Documentation, FieldType, FieldTypeDefinition, ScalarType};
+use crate::graphql::{BottomTypeConfig, CompileConfig};
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -44,10 +45,9 @@ fn compile_field_type(
                 let type_literal = format!("\"{}\"", parent.type_name);
                 (type_literal.clone(), type_literal)
             } else {
-                let use_custom_scalars = ctx.use_custom_scalars;
                 (
-                    compile_scalar(&sc_type, use_custom_scalars),
-                    compile_scalar(&sc_type, use_custom_scalars),
+                    compile_scalar(ctx.config, &sc_type),
+                    compile_scalar(ctx.config, &sc_type),
                 )
             }
         }
@@ -136,17 +136,15 @@ pub fn compile_ts_fields<'a>(
     Ok(ts_fields)
 }
 
-pub fn compile_scalar(scalar: &ScalarType, use_custom_scalars: bool) -> String {
+pub fn compile_scalar(config: &CompileConfig, scalar: &ScalarType) -> String {
     match scalar {
         ScalarType::Boolean => String::from("boolean"),
         ScalarType::String | ScalarType::ID => String::from("string"),
         ScalarType::Float | ScalarType::Int => String::from("number"),
-        ScalarType::Custom(name) => {
-            if use_custom_scalars {
-                name.clone()
-            } else {
-                String::from("any")
-            }
-        }
+        ScalarType::Custom(name) => match &config.bottom_type_config {
+            BottomTypeConfig::UseBottomType => String::from("any"),
+            BottomTypeConfig::UseRealName => name.clone(),
+            BottomTypeConfig::UseRealNameWithPrefix(s) => format!("{}{}", s, name),
+        },
     }
 }
