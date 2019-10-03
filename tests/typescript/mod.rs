@@ -4,6 +4,7 @@ mod complex;
 mod enumeration;
 mod field;
 mod variable;
+mod parse_gql_tags;
 
 #[test]
 fn compile_simple_query() {

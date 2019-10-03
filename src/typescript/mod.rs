@@ -22,6 +22,8 @@ pub enum Error {
     UnionOnlyAllowedTypename(String),
     UnionCanOnlyHaveObjectImplementors,
     MissingType(String),
+    // TODO: remove from here
+    NoMatchingQueryDelimitor(String),
     NotGlobalType(String),
     UnknownField(String, String),
     UnknownFragment(String),

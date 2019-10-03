@@ -1,6 +1,6 @@
 use super::cli::RuntimeConfig;
 use super::graphql::schema::Schema;
-use super::graphql::{compile_file, compile_global_types_file, CompileConfig};
+use super::graphql::{compile_file, compile_typescript_file, compile_global_types_file, CompileConfig};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -34,6 +34,7 @@ type WorkResult = Result<SuccessWorkResult, Error>;
 enum Work {
     GraphQL(PathBuf),
     DirEntry(PathBuf),
+    Typescript(PathBuf)
 }
 
 impl Work {
@@ -42,10 +43,14 @@ impl Work {
         let mut more_work = vec![];
         for raw_entry in readdir {
             let path = raw_entry?.path();
-            if path.is_dir() {
+            if path.is_dir() && !path.ends_with("__generated__") {
                 more_work.push(Work::DirEntry(path));
-            } else if path.is_file() && path.extension().map_or(false, |x| x == "graphql") {
-                more_work.push(Work::GraphQL(path));
+            } else if path.is_file() {
+                if path.extension().map_or(false, |x| x == "graphql") {
+                    more_work.push(Work::GraphQL(path));
+                } else if path.extension().map_or(false, |x| x == "ts") {
+                    more_work.push(Work::Typescript(path));
+                }
             }
         }
         Ok(more_work)
@@ -60,6 +65,10 @@ impl Work {
             Work::GraphQL(path) => compile_file(path, config, schema)
                 .map(SuccessWorkResult::MoreGlobalTypes)
                 .map_err(Error::GraphQL),
+            Work::Typescript(path) => compile_typescript_file(path, config, schema)
+                    .map(SuccessWorkResult::MoreGlobalTypes)
+                    .map_err(Error::GraphQL)
+            
         }
     }
 }

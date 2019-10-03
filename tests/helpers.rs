@@ -51,6 +51,20 @@ pub fn basic_success_assert(
     assert_generated(&temp_dir, expected_file_name, expected_content);
 }
 
+pub fn basic_success_assert_typescript(
+    typescript_content: &str,
+    expected_file_name: &str,
+    expected_content: &'static str,
+) {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    temp_dir
+        .child("file.ts")
+        .write_str(typescript_content)
+        .unwrap();
+    cmd.assert().success();
+    assert_generated(&temp_dir, expected_file_name, expected_content);
+}
+
 /// Same as `basic_success_assert` but asserts a global types file as well
 pub fn basic_success_with_global_types_assert(
     graphql_content: &str,

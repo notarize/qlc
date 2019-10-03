@@ -41,7 +41,8 @@ pub enum Error {
     OnlyOneOperationPerDocumentSupported(PathBuf),
 }
 
-fn read_graphql_file(path: &PathBuf) -> std::io::Result<String> {
+// Read any file, not related to graphql
+pub fn read_file(path: &PathBuf) -> std::io::Result<String> {
     let file = File::open(path)?;
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
@@ -96,7 +97,7 @@ fn add_imported_fragments(
             continue;
         }
         let mut file_path = get_file_path_of_fragment(trimmed, current_dir, root_dir);
-        let contents = read_graphql_file(&file_path).map_err(Error::FileError)?;
+        let contents = read_file(&file_path).map_err(Error::FileError)?;
         file_path.pop();
         add_imported_fragments(&file_path, imports, &contents, root_dir)?;
         let mut parsed = graphql_parser::parse_query(&contents)
@@ -119,12 +120,48 @@ fn add_imported_fragments(
     Ok(())
 }
 
+// TODO: find a way to provide typescript file instead
 pub fn compile_file(
     path: &PathBuf,
     config: &CompileConfig,
     schema: &Schema,
 ) -> Result<HashSet<String>, Error> {
-    let contents = read_graphql_file(path).map_err(Error::FileError)?;
+    let contents = read_file(path).map_err(Error::FileError)?;
+    // insert here instead of content
+    compile_graphql(path, contents, config, schema)
+}
+
+pub fn compile_typescript_file(
+    path: &PathBuf,
+    config: &CompileConfig,
+    schema: &Schema,
+) -> Result<HashSet<String>, Error> {
+    let content = read_file(path).map_err(Error::FileError)?;
+    let mut content: &str = content.as_str();
+    let start_delimiter = "gql`";
+    let mut gql_tag_position: Option<usize> = content.find(start_delimiter);
+    let mut queries = String::new();
+    while gql_tag_position.is_some() {
+        let end_delimiter = "`;";
+        // We only take after what we already parsed
+        let end_tag_position: Option<usize> = content.find(end_delimiter);
+        let new_str = match end_tag_position {
+            Some(end_position) => Ok(&content[gql_tag_position.unwrap() + start_delimiter.len()..end_position]),
+            None => Err(format!("Found no matching delimiter to end query beggining at position {}", gql_tag_position.unwrap()))
+        };
+        queries.push_str(new_str.map_err(|e| Error::CompileError(path.to_owned(), super::typescript::Error::NoMatchingQueryDelimitor(e)))?);
+        content = &content[end_tag_position.unwrap()..];
+        gql_tag_position = content.find(start_delimiter);
+    }
+    compile_graphql(path, queries, config, schema)
+}
+
+pub fn compile_graphql(
+    path: &PathBuf,
+    contents: String,
+    config: &CompileConfig,
+    schema: &Schema,
+) -> Result<HashSet<String>, Error> {
     let parsed = graphql_parser::parse_query(&contents)
         .map_err(|e| Error::GraphqlFileParseError(path.clone(), e))?;
     let mut parsed_imported_fragments = HashMap::new();
