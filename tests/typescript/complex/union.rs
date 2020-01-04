@@ -5,58 +5,62 @@ fn test_document_bundle_annotations(query_content: &str, expected_compile: &str)
     expected.push_str(
         "
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges = {
   /**
    * The item at the end of the edge.
    */
   node: TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node | null;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations = {
   /**
    * A list of edges.
    */
   edges: (TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges | null)[] | null;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node = {
   /**
    * Visible annotations for a document
    */
   annotations: TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations | null;
   id: string;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges = {
   /**
    * The item at the end of the edge.
    */
   node: TestQuery_meeting_Meeting_document_bundle_documents_edges_node | null;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents {
+export type TestQuery_meeting_Meeting_document_bundle_documents = {
   /**
    * A list of edges.
    */
   edges: (TestQuery_meeting_Meeting_document_bundle_documents_edges | null)[] | null;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle {
+export type TestQuery_meeting_Meeting_document_bundle = {
   documents: TestQuery_meeting_Meeting_document_bundle_documents | null;
-}
+};
 
-export interface TestQuery_meeting_Meeting {
+export type TestQuery_meeting_Meeting = {
   document_bundle: TestQuery_meeting_Meeting_document_bundle | null;
-}
+};
 
-export type TestQuery_meeting = TestQuery_meeting_Meeting;
+export type TestQuery_meeting_$$other = {
 
-export interface TestQuery {
+};
+
+export type TestQuery_meeting = TestQuery_meeting_Meeting | TestQuery_meeting_$$other;
+
+export type TestQuery = {
   /**
    * Fetches an object given its ID.
    */
   meeting: TestQuery_meeting | null;
-}
+};
         ");
 
     basic_success_assert(
@@ -105,29 +109,19 @@ fn compile_union_with_only_implementing_types() {
 }
         ",
         r#"
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation {
-  __typename: "CheckmarkAnnotation";
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation = {
   author_id: string;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation {
-  __typename: "ImageAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation {
-  __typename: "TextAnnotation";
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation = {
   text: string;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation {
-  __typename: "VectorGraphicAnnotation";
-}
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other = {
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation {
-  __typename: "WhiteboxAnnotation";
-}
+};
 
-export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation;
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other;
        "#,
     );
 }
@@ -147,35 +141,25 @@ as: __typename
 }
         ",
         r#"
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation = {
   __typename: "CheckmarkAnnotation";
   as: "CheckmarkAnnotation";
-  typername: "CheckmarkAnnotation";
   author_id: string;
-}
+  typername: "CheckmarkAnnotation";
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation {
-  __typename: "ImageAnnotation";
-  as: "ImageAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation = {
   __typename: "TextAnnotation";
   as: "TextAnnotation";
   text: string;
-}
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation {
-  __typename: "VectorGraphicAnnotation";
-  as: "VectorGraphicAnnotation";
-}
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other = {
+  __typename: "ImageAnnotation" | "VectorGraphicAnnotation" | "WhiteboxAnnotation";
+  as: "ImageAnnotation" | "VectorGraphicAnnotation" | "WhiteboxAnnotation";
+};
 
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation {
-  __typename: "WhiteboxAnnotation";
-  as: "WhiteboxAnnotation";
-}
-
-export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation;
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other;
        "#,
     );
 }
@@ -189,31 +173,9 @@ fn compile_union_with_interface_only() {
 }
         ",
         r#"
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation {
-  __typename: "CheckmarkAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation {
-  __typename: "ImageAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation {
-  __typename: "TextAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation {
-  __typename: "VectorGraphicAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation {
-  __typename: "WhiteboxAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_AnnotationFields {
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = {
   id: string;
-}
-
-export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = (TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation) & TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_AnnotationFields;
+};
        "#,
     );
 }
@@ -231,32 +193,16 @@ fn compile_union_with_interface_and_implementing_types() {
 }
         ",
         r#"
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation {
-  __typename: "CheckmarkAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation {
-  __typename: "ImageAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation {
-  __typename: "TextAnnotation";
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation = {
   author_id: string;
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation {
-  __typename: "VectorGraphicAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation {
-  __typename: "WhiteboxAnnotation";
-}
-
-export interface TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_AnnotationFields {
   id: string;
-}
+};
 
-export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = (TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_CheckmarkAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_ImageAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_VectorGraphicAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_WhiteboxAnnotation) & TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_AnnotationFields;
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other = {
+  id: string;
+};
+
+export type TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node = TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_TextAnnotation | TestQuery_meeting_Meeting_document_bundle_documents_edges_node_annotations_edges_node_$$other;
        "#,
     );
 }
@@ -277,32 +223,18 @@ fragment meetingAnnotationFragment on Annotation {
         ",
         "meetingAnnotationFragment.ts",
         r#"
-export interface meetingAnnotationFragment_CheckmarkAnnotation {
-  __typename: "CheckmarkAnnotation";
-}
-
-export interface meetingAnnotationFragment_ImageAnnotation {
-  __typename: "ImageAnnotation";
-}
-
-export interface meetingAnnotationFragment_TextAnnotation {
+export type meetingAnnotationFragment_TextAnnotation = {
   __typename: "TextAnnotation";
-  text: string;
-}
-
-export interface meetingAnnotationFragment_VectorGraphicAnnotation {
-  __typename: "VectorGraphicAnnotation";
-}
-
-export interface meetingAnnotationFragment_WhiteboxAnnotation {
-  __typename: "WhiteboxAnnotation";
-}
-
-export interface meetingAnnotationFragment_AnnotationFields {
   id: string;
-}
+  text: string;
+};
 
-export type meetingAnnotationFragment = (meetingAnnotationFragment_CheckmarkAnnotation | meetingAnnotationFragment_ImageAnnotation | meetingAnnotationFragment_TextAnnotation | meetingAnnotationFragment_VectorGraphicAnnotation | meetingAnnotationFragment_WhiteboxAnnotation) & meetingAnnotationFragment_AnnotationFields;
+export type meetingAnnotationFragment_$$other = {
+  __typename: "CheckmarkAnnotation" | "ImageAnnotation" | "VectorGraphicAnnotation" | "WhiteboxAnnotation";
+  id: string;
+};
+
+export type meetingAnnotationFragment = meetingAnnotationFragment_TextAnnotation | meetingAnnotationFragment_$$other;
         "#,
     );
 }

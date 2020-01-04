@@ -2,65 +2,60 @@
 use serde::Deserialize;
 use std::io::Read;
 
-#[derive(Deserialize)]
-pub struct FieldSubtypeJSON {
+#[derive(Deserialize, Debug)]
+pub struct FieldType {
     pub kind: String,
     pub name: Option<String>,
     #[serde(rename(deserialize = "ofType"))]
-    pub of_type: Option<Box<FieldSubtypeJSON>>,
+    pub of_type: Option<Box<FieldType>>,
 }
 
-#[derive(Deserialize)]
-pub struct FieldJSON {
+#[derive(Deserialize, Debug)]
+pub struct Field {
     pub name: String,
     pub description: Option<String>,
     #[serde(rename(deserialize = "type"))]
-    pub type_desc: FieldSubtypeJSON,
+    pub type_information: FieldType,
 }
 
-#[derive(Deserialize)]
-pub struct EnumValuesJSON {
+#[derive(Deserialize, Debug)]
+pub struct ComplexObjectDescription {
     pub name: String,
 }
 
-#[derive(Deserialize)]
-pub struct UnionPossibleTypeJSON {
-    pub name: String,
-}
-
-#[derive(Deserialize)]
-pub struct TypeJSON {
+#[derive(Deserialize, Debug)]
+pub struct Type {
     pub kind: String,
     pub name: String,
     pub description: Option<String>,
     #[serde(rename(deserialize = "possibleTypes"))]
-    pub possible_types: Option<Vec<UnionPossibleTypeJSON>>,
+    pub possible_types: Option<Vec<ComplexObjectDescription>>,
     #[serde(rename(deserialize = "inputFields"))]
-    pub input_fields: Option<Vec<FieldJSON>>,
-    pub fields: Option<Vec<FieldJSON>>,
+    pub input_fields: Option<Vec<Field>>,
+    pub fields: Option<Vec<Field>>,
     #[serde(rename(deserialize = "enumValues"))]
-    pub enum_values: Option<Vec<EnumValuesJSON>>,
+    pub enum_values: Option<Vec<ComplexObjectDescription>>,
 }
 
-#[derive(Deserialize)]
-pub struct SchemaJSON {
-    pub types: Vec<TypeJSON>,
+#[derive(Deserialize, Debug)]
+pub struct Schema {
+    pub types: Vec<Type>,
 }
 
-impl SchemaJSON {
-    pub fn from_reader<R: Read>(reader: R) -> Result<Self, serde_json::Error> {
-        let parsed: RawSchemaJSON = serde_json::from_reader(reader)?;
+impl Schema {
+    pub fn try_from_reader(reader: impl Read) -> Result<Self, serde_json::Error> {
+        let parsed: RawSchema = serde_json::from_reader(reader)?;
         Ok(parsed.data.schema)
     }
 }
 
 #[derive(Deserialize)]
-struct DataJSON {
+struct Data {
     #[serde(rename(deserialize = "__schema"))]
-    schema: SchemaJSON,
+    schema: Schema,
 }
 
 #[derive(Deserialize)]
-struct RawSchemaJSON {
-    data: DataJSON,
+struct RawSchema {
+    data: Data,
 }

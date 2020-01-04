@@ -40,7 +40,10 @@ query TestQuery {
         .write_str(
             "
 fragment testFragment on Viewer {
-  user { id }
+  user {
+    id
+    lastName: last_name
+  }
 }
         ",
         )
@@ -52,12 +55,13 @@ fragment testFragment on Viewer {
         &temp_dir,
         "TestQuery.ts",
         "
-export interface TestQuery_viewer_user {
+export type TestQuery_viewer_user = {
   firstName: string | null;
   id: string;
-}
+  lastName: string | null;
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   id: string;
   id2: string;
   id3: string;
@@ -66,14 +70,14 @@ export interface TestQuery_viewer {
    * about current viewer and access any records associated w/ their account.
    */
   user: TestQuery_viewer_user | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     ",
     );
 }
@@ -114,25 +118,25 @@ fragment testFragment on Viewer {
         &temp_dir,
         "TestQuery.ts",
         "
-export interface TestQuery_viewer_user {
+export type TestQuery_viewer_user = {
   id: string;
-}
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   id: string;
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   user: TestQuery_viewer_user | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     ",
     );
 }
@@ -214,33 +218,33 @@ fragment absoluteUserFragmentTwo on User {
         r#"
 import { UserRole } from "__generated__/globalTypes";
 
-export interface TestQuery_viewer_user_customerProfile {
+export type TestQuery_viewer_user_customerProfile = {
   id: string;
-}
+};
 
-export interface TestQuery_viewer_user {
+export type TestQuery_viewer_user = {
   as: "User";
   createdAt: any | null;
   customerProfile: TestQuery_viewer_user_customerProfile | null;
   id: string;
   roles: (UserRole | null)[] | null;
-}
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   id: string;
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   user: TestQuery_viewer_user | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     "#,
     );
 
@@ -272,10 +276,10 @@ export enum UserRole {
         .child("absoluteUserFragmentOne.ts");
     frag_one.assert(similar(
         r#"
-export interface absoluteUserFragmentOne {
+export type absoluteUserFragmentOne = {
   as: "User";
   id: string;
-}
+};
     "#,
     ));
 
@@ -285,21 +289,21 @@ export interface absoluteUserFragmentOne {
         .child("absoluteUserFragmentTwo.ts");
     frag_two.assert(similar(
         r#"
-export interface absoluteUserFragmentTwo_customerProfile {
+export type absoluteUserFragmentTwo_customerProfile = {
   id: string;
-}
+};
 
-export interface absoluteUserFragmentTwo {
+export type absoluteUserFragmentTwo = {
   createdAt: any | null;
   customerProfile: absoluteUserFragmentTwo_customerProfile | null;
   id: string;
-}
+};
     "#,
     ));
 }
 
 #[test]
-fn compile_recurisve_fragment_with_global() {
+fn compile_recursive_fragment_with_global() {
     let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
     temp_dir
         .child("main.graphql")
@@ -372,7 +376,7 @@ fragment userFragmentTwo on User {
         r#"
 import { Feature, UserRole } from "__generated__/globalTypes";
 
-export interface TestQuery_viewer_user_scheduled_tiers {
+export type TestQuery_viewer_user_scheduled_tiers = {
   /**
    * Flag indicating if currently running and active schedule
    */
@@ -381,41 +385,41 @@ export interface TestQuery_viewer_user_scheduled_tiers {
    * Tier schedule end time or indefinite
    */
   endAt: any | null;
-}
+};
 
-export interface TestQuery_viewer_user {
+export type TestQuery_viewer_user = {
   /**
    * An user's active features and features inherited from tier
    */
-  featureList: (Feature)[];
+  featureList: Feature[];
   id: string;
   roles: (UserRole | null)[] | null;
   /**
    * A user's scheduled tiers including historical, current and future
    */
-  scheduled_tiers: (TestQuery_viewer_user_scheduled_tiers)[];
+  scheduled_tiers: TestQuery_viewer_user_scheduled_tiers[];
   /**
    * Whether or not user is being used for single transaction
    */
   singleUse: boolean;
   systemId: number | null;
-}
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   id: string;
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   user: TestQuery_viewer_user | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     "#,
     );
     assert_generated(

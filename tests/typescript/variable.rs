@@ -12,25 +12,23 @@ query TestQuery($meetingId: ID!) {
         ",
         "TestQuery.ts",
         r#"
-export interface TestQuery_meeting_Node {
+export type TestQuery_meeting = {
   /**
    * ID of the object.
    */
   id: string;
-}
+};
 
-export type TestQuery_meeting = TestQuery_meeting_Node;
-
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Fetches an object given its ID.
    */
   meeting: TestQuery_meeting | null;
-}
+};
 
-export interface TestQueryVariables {
+export type TestQueryVariables = {
   meetingId: string;
-}
+};
         "#,
     );
 }
@@ -49,28 +47,27 @@ mutation CatDocs($input: CategorizeDocumentsInput!) {
         r#"
 import { CategorizeDocumentsInput } from "__generated__/globalTypes";
 
-export interface CatDocs_categorizeDocuments {
+export type CatDocs_categorizeDocuments = {
   success: boolean;
-}
+};
 
-export interface CatDocs {
+export type CatDocs = {
   categorizeDocuments: CatDocs_categorizeDocuments | null;
-}
+};
 
-export interface CatDocsVariables {
+export type CatDocsVariables = {
   input: CategorizeDocumentsInput;
-}
-
+};
         "#,
         r#"
 
-export interface CategorizeDocumentsInput {
+export type CategorizeDocumentsInput = {
   /**
    * A unique identifier for the client performing the mutation.
    */
   clientMutationId?: string | null;
-  document_categories: (DocumentCategoryInput)[];
-}
+  document_categories: DocumentCategoryInput[];
+};
 
 /**
  * Possible document categories
@@ -93,7 +90,7 @@ export enum DocumentCategories {
   CUSTOM = "CUSTOM",
 }
 
-export interface DocumentCategoryInput {
+export type DocumentCategoryInput = {
   /**
    * Category of the document
    */
@@ -106,8 +103,7 @@ export interface DocumentCategoryInput {
    * ID of the document to be categorized
    */
   document_id: string;
-}
-
+};
         "#,
     );
 }
@@ -128,24 +124,24 @@ mutation AddCheckmarkAnnotation($input: AddCheckmarkAnnotationInput!) {
         r#"
 import { AddCheckmarkAnnotationInput } from "__generated__/globalTypes";
 
-export interface AddCheckmarkAnnotation_addCheckmarkAnnotation_annotation {
+export type AddCheckmarkAnnotation_addCheckmarkAnnotation_annotation = {
   id: string;
-}
+};
 
-export interface AddCheckmarkAnnotation_addCheckmarkAnnotation {
+export type AddCheckmarkAnnotation_addCheckmarkAnnotation = {
   annotation: AddCheckmarkAnnotation_addCheckmarkAnnotation_annotation | null;
-}
+};
 
-export interface AddCheckmarkAnnotation {
+export type AddCheckmarkAnnotation = {
   addCheckmarkAnnotation: AddCheckmarkAnnotation_addCheckmarkAnnotation | null;
-}
+};
 
-export interface AddCheckmarkAnnotationVariables {
+export type AddCheckmarkAnnotationVariables = {
   input: AddCheckmarkAnnotationInput;
-}
+};
         "#,
         r#"
-export interface AddCheckmarkAnnotationInput {
+export type AddCheckmarkAnnotationInput = {
   annotation_designation_id?: string | null;
   author_id?: string | null;
   /**
@@ -158,16 +154,16 @@ export interface AddCheckmarkAnnotationInput {
   meeting_id?: string | null;
   review_session_id?: string | null;
   size: SizeInput;
-}
+};
 
-export interface AnnotationLocationInput {
+export type AnnotationLocationInput = {
   page: number;
   page_type?: PageTypes | null;
   /**
    * Top left coordinate
    */
   point?: PointInput | null;
-}
+};
 
 /**
  * Type of page specified; unless DOCUMENT refers to specialized notary legal page
@@ -231,16 +227,15 @@ export enum PageTypes {
   STATE_WY = "STATE_WY",
 }
 
-export interface PointInput {
+export type PointInput = {
   x: number;
   y: number;
-}
+};
 
-export interface SizeInput {
+export type SizeInput = {
   height: number;
   width: number;
-}
-
+};
         "#,
     );
 }

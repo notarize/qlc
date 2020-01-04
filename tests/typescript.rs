@@ -11,34 +11,34 @@ fn compile_simple_query() {
         "
 query TestQuery {
   viewer {
-    id
     me: user {
       id
     }
+    id
   }
 }
     ",
         "TestQuery.ts",
         "
-export interface TestQuery_viewer_me {
+export type TestQuery_viewer_me = {
   id: string;
-}
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   id: string;
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   me: TestQuery_viewer_me | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     ",
     );
 }
@@ -59,26 +59,26 @@ query TestQuery {
     ",
         "TestQuery.ts",
         r#"
-export interface TestQuery_viewer_user {
+export type TestQuery_viewer_user = {
   __typename: "User";
   id: string;
-}
+};
 
-export interface TestQuery_viewer {
+export type TestQuery_viewer = {
   as: "Viewer";
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   user: TestQuery_viewer_user | null;
-}
+};
 
-export interface TestQuery {
+export type TestQuery = {
   /**
    * Access to fields relevant to a consumer of the application
    */
   viewer: TestQuery_viewer | null;
-}
+};
     "#,
     );
 }
@@ -94,18 +94,18 @@ fragment myViewerFragment on Viewer {
     ",
         "myViewerFragment.ts",
         "
-export interface myViewerFragment_user {
+export type myViewerFragment_user = {
   id: string;
-}
+};
 
-export interface myViewerFragment {
+export type myViewerFragment = {
   id: string;
   /**
    * The user associated with the current viewer. Use this field to get info
    * about current viewer and access any records associated w/ their account.
    */
   user: myViewerFragment_user | null;
-}
+};
     ",
     );
 }
@@ -124,20 +124,20 @@ mutation CreateWitness {
     ",
         "CreateWitness.ts",
         "
-export interface CreateWitness_createWitness_meeting {
+export type CreateWitness_createWitness_meeting = {
   id: string;
-}
+};
 
-export interface CreateWitness_createWitness {
+export type CreateWitness_createWitness = {
   meeting: CreateWitness_createWitness_meeting | null;
-}
+};
 
-export interface CreateWitness {
+export type CreateWitness = {
   /**
    * Creates a witness
    */
   createWitness: CreateWitness_createWitness | null;
-}
+};
     ",
     );
 }

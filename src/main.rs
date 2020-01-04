@@ -1,9 +1,3 @@
-extern crate clap;
-extern crate crossbeam_channel as channel;
-extern crate graphql_parser;
-extern crate num_cpus;
-extern crate serde_json;
-
 mod cli;
 mod graphql;
 mod typescript;

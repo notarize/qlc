@@ -2,7 +2,15 @@ use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+fn add_no_capture(mut cmd: Command) -> Command {
+    if std::env::args().any(|arg| arg == "--nocapture") {
+        cmd.stdin(Stdio::inherit());
+        cmd.stderr(Stdio::inherit());
+    }
+    cmd
+}
 
 pub fn qlc_command_with_fake_dir() -> (Command, TempDir) {
     let mut cmd = Command::cargo_bin("qlc").unwrap();
@@ -42,11 +50,12 @@ pub fn basic_success_assert(
     expected_file_name: &str,
     expected_content: &'static str,
 ) {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    let (cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
     temp_dir
         .child("file.graphql")
         .write_str(graphql_content)
         .unwrap();
+    let mut cmd = add_no_capture(cmd);
     cmd.assert().success();
     assert_generated(&temp_dir, expected_file_name, expected_content);
 }
@@ -58,11 +67,12 @@ pub fn basic_success_with_global_types_assert(
     expected_content: &'static str,
     expected_global_types_content: &'static str,
 ) {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    let (cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
     temp_dir
         .child("file.graphql")
         .write_str(graphql_content)
         .unwrap();
+    let mut cmd = add_no_capture(cmd);
     cmd.assert().success();
     assert_generated(&temp_dir, expected_file_name, expected_content);
     assert_generated(&temp_dir, "globalTypes.ts", expected_global_types_content);

@@ -16,18 +16,22 @@ query TestQuery {
         r#"
 import { MeetingEndedState } from "__generated__/globalTypes";
 
-export interface TestQuery_meeting_Meeting {
+export type TestQuery_meeting_Meeting = {
   endedState: MeetingEndedState;
-}
+};
 
-export type TestQuery_meeting = TestQuery_meeting_Meeting;
+export type TestQuery_meeting_$$other = {
 
-export interface TestQuery {
+};
+
+export type TestQuery_meeting = TestQuery_meeting_Meeting | TestQuery_meeting_$$other;
+
+export type TestQuery = {
   /**
    * Fetches an object given its ID.
    */
   meeting: TestQuery_meeting | null;
-}
+};
         "#,
         r#"
 /**

@@ -1,6 +1,7 @@
 use super::cli::RuntimeConfig;
 use super::graphql::schema::Schema;
 use super::graphql::{compile_file, compile_global_types_file, CompileConfig};
+use crossbeam_channel as channel;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -82,10 +83,10 @@ impl Worker {
         let compile_config = CompileConfig::from(&*self.config);
         while let Some(work) = self.pop_work() {
             match work.run(&compile_config, &self.schema) {
-                Ok(SuccessWorkResult::MoreGlobalTypes(globals)) => {
+                Ok(SuccessWorkResult::MoreGlobalTypes(new_globals)) => {
                     let mut self_globals = self.global_types.lock().unwrap();
-                    for global in globals {
-                        self_globals.insert(global);
+                    for potential_new_global in new_globals.into_iter() {
+                        self_globals.insert(potential_new_global);
                     }
                 }
                 Ok(SuccessWorkResult::MoreWork(works)) => {
@@ -194,7 +195,7 @@ impl WorkerPool {
         let num_waiting = Arc::new(AtomicU8::new(0));
         let num_quitting = Arc::new(AtomicU8::new(0));
         let mut handles = vec![];
-        let initial_work = Work::DirEntry(self.config.root_dir_path().clone());
+        let initial_work = Work::DirEntry(self.config.root_dir_path());
         let root = Message::Work(initial_work);
         tx.send(root).unwrap();
         for _ in 0..self.config.thread_count() {
