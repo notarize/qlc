@@ -60,13 +60,15 @@ fn input_def_from_type(
     input_type: &schema::InputObjectType,
 ) -> Result<String> {
     let mut fields = Vec::new();
-    let mut sorted = input_type
-        .fields
-        .iter()
-        .collect::<Vec<(&String, &schema_field::Field)>>();
-    #[cfg(debug_assertions)] // for test stability
-    sorted.sort_unstable_by_key(|item| item.0);
-    for (name, field) in sorted {
+    #[cfg(debug_assertions)] // for test stability, we sort here
+    let fields_iter = {
+        let mut sorted = input_type.fields.iter().collect::<Vec<_>>();
+        sorted.sort_unstable_by_key(|item| item.0);
+        sorted.into_iter()
+    };
+    #[cfg(not(debug_assertions))]
+    let fields_iter = input_type.fields.iter();
+    for (name, field) in fields_iter {
         let doc = compile_documentation(&field.documentation, 2);
         let field_type = from_input_def_field_def(config, name, &field)?;
         // TODO will this every be more than one item?
@@ -85,7 +87,7 @@ fn input_def_from_type(
                 format!("  {}{}: ({} | null)[];", doc, name, field_type)
             }
             schema_field::FieldTypeModifier::NullableListOfNullable => {
-                format!("  {}{}: ({} | null)[] | null;", doc, name, field_type)
+                format!("  {}{}?: ({} | null)[] | null;", doc, name, field_type)
             }
         };
         fields.push(ts_field);
@@ -167,26 +169,28 @@ fn global_types_from_names(
         add_sub_input_objects(&mut name_to_type, schema, global_type)?;
         name_to_type.insert(name, global_type);
     }
-    let mut types = Vec::new();
-    let mut sorted_names = name_to_type.iter().collect::<Vec<_>>();
     #[cfg(debug_assertions)] // for test stability
-    sorted_names.sort_unstable_by_key(|value| value.0);
-    for (name, global_type) in sorted_names {
-        match &global_type.definition {
-            schema::TypeDefinition::Enum(enum_type) => {
-                types.push(enum_def_from_type(
-                    name,
-                    &global_type.documentation,
-                    enum_type,
-                ));
-            }
-            schema::TypeDefinition::InputObject(input_object_type) => {
-                types.push(input_def_from_type(config, input_object_type)?);
-            }
-            _ => return Err(Error::NotGlobalType((*name).to_string())),
-        }
-    }
-    Ok(types)
+    let names = {
+        let mut sorted_names = name_to_type.iter().collect::<Vec<_>>();
+        sorted_names.sort_unstable_by_key(|value| value.0);
+        sorted_names.into_iter()
+    };
+    #[cfg(not(debug_assertions))]
+    let names = name_to_type.iter();
+    names
+        .map(|(name, global_type)| {
+            let def = match &global_type.definition {
+                schema::TypeDefinition::Enum(enum_type) => {
+                    enum_def_from_type(name, &global_type.documentation, enum_type)
+                }
+                schema::TypeDefinition::InputObject(input_object_type) => {
+                    input_def_from_type(config, input_object_type)?
+                }
+                _ => return Err(Error::NotGlobalType((*name).to_string())),
+            };
+            Ok(def)
+        })
+        .collect()
 }
 
 pub fn compile_globals(
@@ -259,9 +263,14 @@ fn type_definitions_from_smoosh_complex_ir<'a>(
     smooth_type_name: &str,
 ) -> Result<Vec<Typescript>> {
     let mut modified_complex = complex.clone();
-    let mut all_types = possibilities.collect::<Vec<_>>();
     #[cfg(debug_assertions)] // for test stability
-    all_types.sort_unstable();
+    let all_types = {
+        let mut sorted = possibilities.collect::<Vec<_>>();
+        sorted.sort_unstable();
+        sorted
+    };
+    #[cfg(not(debug_assertions))]
+    let all_types = possibilities.collect::<Vec<_>>();
     modified_complex.name = all_types.join("\" | \"");
     type_definitions_from_complex_ir(config, global_types, &modified_complex, smooth_type_name)
 }
@@ -411,7 +420,14 @@ fn compile_variables_type_definition(
                         }
                     };
                     let type_def = prop_type_def(&var_ir.type_modifier, type_name.to_string());
-                    format!("  {}: {};", var_ir.prop_name, type_def)
+                    match &var_ir.type_modifier {
+                        schema_field::FieldTypeModifier::Nullable
+                        | schema_field::FieldTypeModifier::NullableList
+                        | schema_field::FieldTypeModifier::NullableListOfNullable => {
+                            format!("  {}?: {};", var_ir.prop_name, type_def)
+                        }
+                        _ => format!("  {}: {};", var_ir.prop_name, type_def),
+                    }
                 })
                 .collect();
             format!(
@@ -429,9 +445,14 @@ fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
     if used_globals.is_empty() {
         return String::from("");
     }
-    let mut names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
     #[cfg(debug_assertions)] // for test stability
-    names.sort_unstable();
+    let names = {
+        let mut sorted: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
+        sorted.sort_unstable();
+        sorted
+    };
+    #[cfg(not(debug_assertions))]
+    let names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
     format!(
         "import {{ {} }} from \"__generated__/globalTypes\";\n\n",
         names.join(", ")

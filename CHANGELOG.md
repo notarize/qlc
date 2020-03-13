@@ -1,3 +1,18 @@
+## [0.4.0](https://github.com/notarize/qlc/compare/0.3.0...0.4.0)
+
+### Features
+
+- New IR for better potential for future target langs
+- Switch from `interface` to `type` for _all_ declarations
+
+### Bugfixes
+
+- Utilize new IR for fixes for union and interface types
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.42
+
 ## [0.3.0](https://github.com/notarize/qlc/compare/0.2.0...0.3.0)
 
 ### Features

@@ -90,7 +90,7 @@ impl ModifierBuilder {
     fn actualize(&mut self) {
         self.concrete = match &self.concrete {
             FieldTypeModifier::Nullable => FieldTypeModifier::None,
-            FieldTypeModifier::NullableListOfNullable => FieldTypeModifier::ListOfNullable,
+            FieldTypeModifier::NullableListOfNullable => FieldTypeModifier::NullableList,
             FieldTypeModifier::ListOfNullable => FieldTypeModifier::List,
             old_concrete => {
                 self.higher_order_modifiers.push(old_concrete.clone());
