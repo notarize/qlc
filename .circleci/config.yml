@@ -10,14 +10,14 @@ commands:
 executors:
   default_rust_compiler:
     docker:
-      - image: rust:1.40.0-stretch
+      - image: rust:1.42.0-stretch
     working_directory: /root/notarize/qlc
     environment:
       CARGO_HOME: /root/notarize/qlc/.cargo
 
   cross_compiling_host:
     docker:
-      - image: notarize/cross-rust:1.40.0-stretch
+      - image: notarize/cross-rust:1.42.0-stretch
     working_directory: /root/notarize/qlc
     environment:
       CARGO_HOME: /root/notarize/qlc/.cargo
@@ -29,7 +29,7 @@ executors:
 
   node_env:
     docker:
-      - image: notarize/node:10.14.0
+      - image: notarize/node-ci:12.16.1
     working_directory: /root/notarize/qlc
 
 jobs:
