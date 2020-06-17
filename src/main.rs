@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 mod cli;
 mod graphql;
 mod typescript;

@@ -54,7 +54,7 @@ pub fn try_build_variable_ir<'a>(
                 type_ir: graph_name.into(),
             })
         })
-        .collect::<Result<Vec<Variable>>>()
+        .collect::<Result<Vec<Variable<'_>>>>()
         .map(Some)
 }
 

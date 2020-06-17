@@ -122,7 +122,7 @@ struct ComplexTraversal<'a> {
 impl<'a> ComplexTraversal<'a> {
     fn clone_for_type_spread(
         &self,
-        context: &'a CompileContext,
+        context: &'a CompileContext<'_>,
         spread_type_name: &'a str,
     ) -> Result<Self> {
         Self::try_from((context, spread_type_name)).map(|mut base| {
@@ -199,7 +199,7 @@ impl<'a> TryFrom<ComplexTraversal<'a>> for ComplexCollection {
 
 impl<'a> TryFrom<(&'a CompileContext<'a>, &'a str)> for ComplexTraversal<'a> {
     type Error = Error;
-    fn try_from((context, type_name): (&'a CompileContext, &'a str)) -> Result<Self> {
+    fn try_from((context, type_name): (&'a CompileContext<'_>, &'a str)) -> Result<Self> {
         let schema_type = context
             .schema
             .get_type_for_name(type_name)
@@ -335,7 +335,7 @@ impl<'a, 'b> Operation<'a> {
 }
 
 fn build_from_operation<'a>(
-    context: &CompileContext,
+    context: &CompileContext<'_>,
     operation: &'a parsed_query::OperationDefinition,
 ) -> Result<Operation<'a>> {
     let (op_type_name, op_name, selection_set, var_defs) = match operation {
@@ -367,7 +367,7 @@ fn build_from_operation<'a>(
 
 fn get_type_ir_for_field(
     field_type: &schema_field::ConcreteFieldType,
-    sub_traversal: FieldTraversal,
+    sub_traversal: FieldTraversal<'_>,
 ) -> Result<FieldType> {
     let field_type_ir = match &field_type.definition {
         schema_field::FieldTypeDefinition::InputObject => {
@@ -391,7 +391,7 @@ fn get_type_ir_for_field(
 }
 
 fn insert_field<'a>(
-    context: &'a CompileContext,
+    context: &'a CompileContext<'_>,
     selection_field: &'a parsed_query::Field,
     traversal: &mut ComplexTraversal<'a>,
 ) -> Result<()> {
@@ -426,7 +426,7 @@ fn insert_field<'a>(
 }
 
 fn collect_fields_from_selection_set<'a>(
-    context: &'a CompileContext,
+    context: &'a CompileContext<'_>,
     selection_set: &'a parsed_query::SelectionSet,
     complex_parent: &mut ComplexTraversal<'a>,
 ) -> Result<()> {

@@ -403,7 +403,7 @@ fn type_definitions_from_complex_ir<'a>(
 
 fn compile_variables_type_definition(
     global_types: &mut HashSet<String>,
-    op_ir: &ir::Operation,
+    op_ir: &ir::Operation<'_>,
 ) -> Result<Typescript> {
     let def = match &op_ir.variables {
         Some(var_irs) => {
@@ -459,7 +459,7 @@ fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
     )
 }
 
-pub fn compile_ir(op_ir: &ir::Operation, config: &CompileConfig) -> Result<Compile> {
+pub fn compile_ir(op_ir: &ir::Operation<'_>, config: &CompileConfig) -> Result<Compile> {
     let mut used_global_types = HashSet::new();
     let type_definitions = type_definitions_from_complex_field_collection(
         config,
