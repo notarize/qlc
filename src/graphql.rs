@@ -145,7 +145,7 @@ pub fn compile_file(
     )?;
     let op_ir = ir::Operation::compile(&parsed.definitions[0], schema, parsed_imported_fragments)
         .map_err(Error::IRCompileError)?;
-    let the_compile = typescript::compile_ir(&op_ir, config)
+    let the_compile = typescript::compile_ir(&op_ir, config, schema)
         .map_err(|error| Error::CompileError(path.clone(), error))?;
     let mut generated_dir_path = make_generated_dir(parent_dir)?;
     generated_dir_path.push(the_compile.filename);
