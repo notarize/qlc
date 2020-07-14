@@ -1,3 +1,13 @@
+## [0.5.0](https://github.com/notarize/qlc/compare/0.4.0...0.5.0)
+
+### Bugfixes
+
+- Support custom scalars in the variable position
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.44
+
 ## [0.4.0](https://github.com/notarize/qlc/compare/0.3.0...0.4.0)
 
 ### Features
