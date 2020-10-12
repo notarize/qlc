@@ -37,10 +37,10 @@ pub enum FieldTypeDefinition {
 
 impl FieldTypeDefinition {
     fn is_complex(&self) -> bool {
-        match self {
-            Self::Union | Self::Object | Self::Interface | Self::InputObject => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::Union | Self::Object | Self::Interface | Self::InputObject
+        )
     }
 }
 
