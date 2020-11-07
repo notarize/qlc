@@ -1,7 +1,6 @@
 use crate::graphql::BottomTypeConfig;
 use crate::worker_pool::Error;
 use clap::{crate_authors, crate_version, App, Arg, ArgMatches};
-use std::convert::TryFrom;
 use std::path::PathBuf;
 
 fn cli_parse<'a>() -> ArgMatches<'a> {
@@ -54,7 +53,7 @@ pub struct RuntimeConfig {
     schema_path: PathBuf,
     use_custom_scalars: bool,
     custom_scalar_prefix: Option<String>,
-    number_threads: u8,
+    number_threads: usize,
 }
 
 impl RuntimeConfig {
@@ -62,14 +61,11 @@ impl RuntimeConfig {
         let matches = cli_parse();
         let root_dir = PathBuf::from(matches.value_of("root_dir").unwrap());
         let use_custom_scalars = matches.is_present("use_custom_scalars");
-        let schema_path = match matches.value_of("schema_path") {
-            Some(value) => PathBuf::from(value),
-            None => {
-                let mut path = root_dir.clone();
-                path.push("schema.json");
-                path
-            }
-        };
+        let schema_path = matches.value_of("schema_path").map(PathBuf::from).unwrap_or_else(|| {
+            let mut path = root_dir.clone();
+            path.push("schema.json");
+            path
+        });
         RuntimeConfig {
             root_dir,
             schema_path,
@@ -80,8 +76,7 @@ impl RuntimeConfig {
             number_threads: matches
                 .value_of("nthreads")
                 .and_then(|st| st.parse().ok())
-                .or_else(|| u8::try_from(num_cpus::get()).ok())
-                .unwrap_or_else(|| 4),
+                .unwrap_or_else(|| num_cpus::get()),
         }
     }
 
@@ -101,7 +96,7 @@ impl RuntimeConfig {
         }
     }
 
-    pub fn thread_count(&self) -> u8 {
+    pub fn thread_count(&self) -> usize {
         self.number_threads
     }
 }

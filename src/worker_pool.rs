@@ -5,7 +5,7 @@ use crossbeam_channel as channel;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -71,8 +71,8 @@ struct Worker {
     is_quitting: bool,
     global_types: Arc<Mutex<HashSet<String>>>,
     errors: Arc<Mutex<Vec<Error>>>,
-    num_waiting: Arc<AtomicU8>,
-    num_quitting: Arc<AtomicU8>,
+    num_waiting: Arc<AtomicUsize>,
+    num_quitting: Arc<AtomicUsize>,
     tx: channel::Sender<Message>,
     rx: channel::Receiver<Message>,
     config: Arc<RuntimeConfig>,
@@ -146,11 +146,11 @@ impl Worker {
         }
     }
 
-    fn num_waiting(&self) -> u8 {
+    fn num_waiting(&self) -> usize {
         self.num_waiting.load(Ordering::SeqCst)
     }
 
-    fn num_quitting(&self) -> u8 {
+    fn num_quitting(&self) -> usize {
         self.num_quitting.load(Ordering::SeqCst)
     }
 
@@ -192,8 +192,8 @@ impl WorkerPool {
         let global_types = Arc::new(Mutex::new(HashSet::new()));
         let errors = Arc::new(Mutex::new(Vec::new()));
         let (tx, rx) = channel::unbounded();
-        let num_waiting = Arc::new(AtomicU8::new(0));
-        let num_quitting = Arc::new(AtomicU8::new(0));
+        let num_waiting = Arc::new(AtomicUsize::new(0));
+        let num_quitting = Arc::new(AtomicUsize::new(0));
         let mut handles = vec![];
         let initial_work = Work::DirEntry(self.config.root_dir_path());
         let root = Message::Work(initial_work);
