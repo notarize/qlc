@@ -1,32 +1,216 @@
+use crate::cli::{similar_help_suggestions, PrintableMessage};
 use crate::graphql::schema;
 use crate::graphql::schema::field as schema_field;
 use crate::graphql::variable;
 use graphql_parser::query as parsed_query;
+use graphql_parser::Pos;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::path::Path;
+
+#[derive(Debug)]
+pub enum Warning {
+    OverFragmentNarrowing {
+        position: Pos,
+        possible_types: Vec<String>,
+        spread_type_name: String,
+    },
+}
+
+impl From<(&str, &Path, Warning)> for PrintableMessage {
+    fn from((contents, file_path, warning): (&str, &Path, Warning)) -> Self {
+        match warning {
+            Warning::OverFragmentNarrowing {
+                position,
+                possible_types,
+                spread_type_name,
+            } => PrintableMessage::new_compile_warning(
+                &format!("fragment over narrowing with type `{}`", spread_type_name),
+                file_path,
+                contents,
+                &position,
+                Some(&format!(
+                    "The parent fragments of this spread only allow `{}`, making spreading `{}` uneeded.",
+                    possible_types.join("`, `"),
+                    spread_type_name,
+                )),
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ForeignFragmentJumpState {
+    RootLocal,
+    JustChanged,
+    FullyJumped,
+}
+
+impl ForeignFragmentJumpState {
+    fn is_fully_jumped(&self) -> bool {
+        matches!(self, ForeignFragmentJumpState::FullyJumped)
+    }
+
+    fn is_local(&self) -> bool {
+        matches!(self, ForeignFragmentJumpState::RootLocal)
+    }
+
+    fn jump_inline_one_level(&self) -> Self {
+        if self.is_local() {
+            ForeignFragmentJumpState::RootLocal
+        } else {
+            ForeignFragmentJumpState::FullyJumped
+        }
+    }
+
+    fn jump_foreigin_one_level(&self) -> Self {
+        if self.is_local() {
+            ForeignFragmentJumpState::JustChanged
+        } else {
+            ForeignFragmentJumpState::FullyJumped
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
-    OperationUnsupported,
-    UnparseableInputType,
-    UnknownFragment(String),
-    InputObjectOnSelection,
-    MissingTypeCondition,
-    MissingType(String),
-    SelectionSetOnWrongType(String),
-    MissingSelectionSetOnType(String),
-    UnknownField(String, String),
-    UnexpectedComplexTravseral(String),
+    OperationUnsupported(String, Pos),
+    UnknownFragment(String, Pos, Vec<String>),
+    MissingTypeConditionOnInlineFragment(Pos),
+    SelectionSetOnWrongType(String, Pos),
+    MissingSelectionSetOnType(String, Pos),
+    UnknownField {
+        parent_type_name: String,
+        field_name: String,
+        position: Pos,
+        possible_field_names: Vec<String>,
+    },
     VariableError(variable::Error),
+    MissingType(String),
+    UnexpectedComplexTravseral(String),
+    InputObjectOnSelection {
+        field_name: String,
+        type_name: String,
+    },
+    MixedTerminalAndComplexFields {
+        terminal_type_name: String,
+        complex_type_name: String,
+    },
+}
+
+impl From<(&str, &Path, Error)> for PrintableMessage {
+    fn from((contents, file_path, error): (&str, &Path, Error)) -> Self {
+        match error {
+            Error::OperationUnsupported(operation_type, position) => {
+                // TODO this will get better after we support subscriptions
+                PrintableMessage::new_compile_error(
+                    &format!("unsupported operation `{}`", operation_type),
+                    file_path,
+                    contents,
+                    &position,
+                    Some("QLC does not support this type of operation in a GraphQL document."
+                    ),
+                )
+            }
+            Error::UnknownFragment(name, position, possible_spread_names) => {
+                let extra = match similar_help_suggestions(&name, possible_spread_names.into_iter()) {
+                    None => " Did you forget to import it?".to_string(),
+                    Some(s) => s,
+                };
+                PrintableMessage::new_compile_error(
+                    &format!("unknown spread fragment name `{}`", name),
+                    file_path,
+                    contents,
+                    &position,
+                    Some(&format!("This fragment name doesn't appeart to be in scope.{}", extra)),
+                )
+            }
+            Error::MissingTypeConditionOnInlineFragment(position) => PrintableMessage::new_compile_error(
+                "fragment missing type condition on inline fragment",
+                file_path,
+                contents,
+                &position,
+                Some("Fragments must specify a type they can be spread on."),
+            ),
+            Error::SelectionSetOnWrongType(name, position) => PrintableMessage::new_compile_error(
+                &format!("unexpected selection on field of type `{}`", name),
+                file_path,
+                contents,
+                &position,
+                Some(
+                    "This field has no possible selections. Did you accidentaly place the curlies on this field?"
+                ),
+            ),
+            Error::MissingSelectionSetOnType(name, position) => {
+                PrintableMessage::new_compile_error(
+                    &format!("expected selection on field of type `{}`", name),
+                    file_path,
+                    contents,
+                    &position,
+                    Some("This is a complex type, and it is improper GraphQL not to have at least one sub field selection."),
+                )
+            }
+            Error::UnknownField {
+                parent_type_name,
+                field_name,
+                position,
+                possible_field_names,
+            } => {
+                let extra = match similar_help_suggestions(&field_name, possible_field_names.into_iter()) {
+                    None => "".to_string(),
+                    Some(s) => s,
+                };
+                PrintableMessage::new_compile_error(
+                    &format!("unknown field `{}`", field_name),
+                    file_path,
+                    contents,
+                    &position,
+                    Some(&format!("Check the fields of `{}`.{}", parent_type_name, extra)),
+                )
+            }
+            Error::VariableError(var_error) => {
+                PrintableMessage::from((contents, file_path, var_error))
+            }
+            Error::MissingType(type_name) => PrintableMessage::new_simple_program_error(
+                &format!("failed lookup of type `{}`", type_name),
+            ),
+            Error::InputObjectOnSelection { type_name, field_name } => {
+                PrintableMessage::new_simple_program_error(
+                    &format!("unexpectedly traversing field `{}` with input object type `{}`", field_name, type_name),
+                )
+            }
+            Error::UnexpectedComplexTravseral(type_name) => {
+                PrintableMessage::new_simple_program_error(
+                    &format!("unexpectedly traversing a terminal of type `{}`", type_name),
+                )
+            }
+            Error::MixedTerminalAndComplexFields { complex_type_name, terminal_type_name } => {
+                PrintableMessage::new_simple_program_error(
+                    &format!("unexpectedly attempting merge of complex type `{}` and terminal type `{}`.", complex_type_name, terminal_type_name),
+                )
+            }
+        }
+    }
 }
 
 type Result<T> = std::result::Result<T, Error>;
+type ResultMany<T> = std::result::Result<T, Vec<Error>>;
+type OperationResult<'a> =
+    std::result::Result<(Operation<'a>, Vec<Warning>), (Vec<Error>, Vec<Warning>)>;
 type ImportedFragments = HashMap<String, parsed_query::FragmentDefinition>;
 
 struct CompileContext<'a> {
     schema: &'a schema::Schema,
     imported_fragments: ImportedFragments,
+    warnings: std::cell::RefCell<Vec<Warning>>,
+}
+
+// For a few conversions with ?
+impl From<Error> for Vec<Error> {
+    fn from(error: Error) -> Self {
+        vec![error]
+    }
 }
 
 /// Alias and field name
@@ -50,21 +234,23 @@ impl<'a> UniqueFields<'a> {
         name: &'a str,
         field: &'a schema_field::Field,
         traversal: FieldTraversal<'a>,
-    ) {
+    ) -> Result<()> {
         match self.collection.entry((alias, name)) {
             Entry::Occupied(occupant) => {
-                occupant.into_mut().1.extend_from(traversal);
+                occupant.into_mut().1.extend_from(traversal)?;
             }
             Entry::Vacant(vacany) => {
                 vacany.insert((field, traversal));
             }
         }
+        Ok(())
     }
 
-    fn extend_from(&mut self, other: UniqueFields<'a>) {
+    fn extend_from(&mut self, other: UniqueFields<'a>) -> Result<()> {
         for ((alias, name), (field, traversal)) in other.collection.into_iter() {
-            self.insert(alias, name, field, traversal);
+            self.insert(alias, name, field, traversal)?;
         }
+        Ok(())
     }
 }
 
@@ -79,12 +265,8 @@ impl<'a> TryFrom<UniqueFields<'a>> for Vec<Field> {
                 Ok(Field {
                     prop_name: alias.to_string(),
                     documentation: field.documentation.clone(),
-                    type_modifiers: field
-                        .type_description
-                        .type_modifier_iter()
-                        .cloned()
-                        .collect(),
-                    type_ir: get_type_ir_for_field(concrete, sub_traversal)?,
+                    last_type_modifier: field.type_description.type_modifiers().1.clone(),
+                    type_ir: get_type_ir_for_field(field, concrete, sub_traversal)?,
                 })
             })
             .collect::<Result<Self>>();
@@ -124,11 +306,26 @@ impl<'a> ComplexTraversal<'a> {
         &self,
         context: &'a CompileContext<'_>,
         spread_type_name: &'a str,
+        position: Pos,
+        jump_state: ForeignFragmentJumpState,
     ) -> Result<Self> {
-        Self::try_from((context, spread_type_name)).map(|mut base| {
-            // TODO what happens when we have zero? this is a good instance of warning
+        Self::try_from((context, spread_type_name, position)).map(|mut base| {
             base.concrete_objects
                 .retain(|type_name, _| self.concrete_objects.contains_key(type_name));
+            if !jump_state.is_fully_jumped() && base.concrete_objects.is_empty() {
+                context
+                    .warnings
+                    .borrow_mut()
+                    .push(Warning::OverFragmentNarrowing {
+                        position,
+                        possible_types: self
+                            .concrete_objects
+                            .keys()
+                            .map(|key| key.to_string())
+                            .collect(),
+                        spread_type_name: spread_type_name.to_string(),
+                    });
+            }
             base
         })
     }
@@ -139,15 +336,16 @@ impl<'a> ComplexTraversal<'a> {
         name: &'a str,
         field: &'a schema_field::Field,
         terminal: TerminalTraversal<'a>,
-    ) {
+    ) -> Result<()> {
         for uniques in self.concrete_objects.values_mut() {
             uniques.insert(
                 alias,
                 name,
                 field,
                 FieldTraversal::Terminal(terminal.clone()),
-            );
+            )?;
         }
+        Ok(())
     }
 
     fn insert_complex(
@@ -156,19 +354,20 @@ impl<'a> ComplexTraversal<'a> {
         name: &'a str,
         field: &'a schema_field::Field,
         complex: ComplexTraversal<'a>,
-    ) {
+    ) -> Result<()> {
         for uniques in self.concrete_objects.values_mut() {
-            uniques.insert(alias, name, field, FieldTraversal::Complex(complex.clone()));
+            uniques.insert(alias, name, field, FieldTraversal::Complex(complex.clone()))?;
         }
+        Ok(())
     }
 
-    fn extend_from(&mut self, other: Self) {
+    fn extend_from(&mut self, other: Self) -> Result<()> {
         for (type_name, other_uniques) in other.concrete_objects.into_iter() {
-            self.concrete_objects.get_mut(type_name).map(|uniques| {
-                uniques.extend_from(other_uniques.clone());
-                uniques
-            });
+            if let Some(uniques) = self.concrete_objects.get_mut(type_name) {
+                uniques.extend_from(other_uniques.clone())?;
+            }
         }
+        Ok(())
     }
 }
 
@@ -197,9 +396,11 @@ impl<'a> TryFrom<ComplexTraversal<'a>> for ComplexCollection {
     }
 }
 
-impl<'a> TryFrom<(&'a CompileContext<'a>, &'a str)> for ComplexTraversal<'a> {
+impl<'a> TryFrom<(&'a CompileContext<'a>, &'a str, Pos)> for ComplexTraversal<'a> {
     type Error = Error;
-    fn try_from((context, type_name): (&'a CompileContext<'_>, &'a str)) -> Result<Self> {
+    fn try_from(
+        (context, type_name, position): (&'a CompileContext<'_>, &'a str, Pos),
+    ) -> Result<Self> {
         let schema_type = context
             .schema
             .get_type_for_name(type_name)
@@ -207,28 +408,19 @@ impl<'a> TryFrom<(&'a CompileContext<'a>, &'a str)> for ComplexTraversal<'a> {
         let fields_lookup = schema_type
             .definition
             .get_fields_lookup()
-            .ok_or_else(|| Error::SelectionSetOnWrongType(type_name.to_string()))?;
+            .ok_or_else(|| Error::SelectionSetOnWrongType(type_name.to_string(), position))?;
         let concrete_objects = match &schema_type.definition {
             schema::TypeDefinition::Object(_) => {
                 let mut concrete_objects = HashMap::with_capacity(1);
                 concrete_objects.insert(type_name, UniqueFields::new());
                 concrete_objects
             }
-            schema::TypeDefinition::Union(union) => {
-                let mut concrete_objects: HashMap<&str, _> =
-                    HashMap::with_capacity(union.possible_types.len());
-                for possible_type in union.possible_types.iter() {
-                    concrete_objects.insert(possible_type, UniqueFields::new());
-                }
-                concrete_objects
-            }
-            schema::TypeDefinition::Interface(interface) => {
-                let mut concrete_objects: HashMap<&str, _> =
-                    HashMap::with_capacity(interface.possible_types.len());
-                for possible_type in interface.possible_types.iter() {
-                    concrete_objects.insert(possible_type, UniqueFields::new());
-                }
-                concrete_objects
+            schema::TypeDefinition::Interface(schema::InterfaceType { possible_types, .. })
+            | schema::TypeDefinition::Union(schema::UnionType { possible_types, .. }) => {
+                possible_types
+                    .iter()
+                    .map(|possible_type| (possible_type.as_ref(), UniqueFields::new()))
+                    .collect()
             }
             _ => return Err(Error::UnexpectedComplexTravseral(type_name.to_string())),
         };
@@ -247,29 +439,22 @@ enum FieldTraversal<'a> {
 }
 
 impl<'a> FieldTraversal<'a> {
-    fn extend_from(&mut self, other: Self) {
+    fn extend_from(&mut self, other: Self) -> Result<()> {
         match self {
-            Self::Complex(self_complex) => {
-                if let Self::Complex(other_complex) = other {
-                    self_complex.extend_from(other_complex);
-                } else {
-                    eprintln!("This is a bug in QLC (most likely):");
-                    panic!(
-                        "Cannot combine complex and terminal fields {}.",
-                        self_complex.type_name
-                    );
-                }
-            }
-            Self::Terminal(self_terminal) => {
-                if let Self::Complex(other_complex) = other {
-                    eprintln!("This is a bug in QLC (most likely):");
-                    panic!(
-                        "Cannot combine terminal and complex fields {} and {}.",
-                        self_terminal.type_name, other_complex.type_name
-                    );
-                }
-                // Nothing to do if both terminal
-            }
+            Self::Complex(self_complex) => match other {
+                Self::Complex(other_complex) => self_complex.extend_from(other_complex),
+                Self::Terminal(other_terminal) => Err(Error::MixedTerminalAndComplexFields {
+                    complex_type_name: self_complex.type_name.to_string(),
+                    terminal_type_name: other_terminal.type_name.to_string(),
+                }),
+            },
+            Self::Terminal(self_terminal) => match other {
+                Self::Terminal(_) => Ok(()), // Nothing to do if both terminal
+                Self::Complex(other_complex) => Err(Error::MixedTerminalAndComplexFields {
+                    complex_type_name: other_complex.type_name.to_string(),
+                    terminal_type_name: self_terminal.type_name.to_string(),
+                }),
+            },
         }
     }
 }
@@ -278,7 +463,7 @@ impl<'a> FieldTraversal<'a> {
 pub struct Field {
     pub prop_name: String,
     pub documentation: schema::Documentation,
-    pub type_modifiers: Vec<schema_field::FieldTypeModifier>,
+    pub last_type_modifier: schema_field::FieldTypeModifier,
     pub type_ir: FieldType,
 }
 
@@ -313,48 +498,89 @@ impl<'a, 'b> Operation<'a> {
         definition: &'a parsed_query::Definition,
         schema: &'b schema::Schema,
         imported_fragments: ImportedFragments,
-    ) -> Result<Self> {
+    ) -> OperationResult<'a> {
         let context = CompileContext {
             schema,
             imported_fragments,
+            warnings: std::cell::RefCell::new(Vec::new()),
         };
-        match definition {
-            parsed_query::Definition::Operation(op_def) => build_from_operation(&context, op_def),
+        let operation = match definition {
+            parsed_query::Definition::Operation(op_def) => {
+                match build_from_operation(&context, op_def, ForeignFragmentJumpState::RootLocal) {
+                    Ok(op) => op,
+                    Err(errors) => return Err((errors, context.warnings.into_inner())),
+                }
+            }
             parsed_query::Definition::Fragment(frag_def) => {
                 let parsed_query::TypeCondition::On(type_name) = &frag_def.type_condition;
-                let mut parent = ComplexTraversal::try_from((&context, type_name.as_ref()))?;
-                collect_fields_from_selection_set(&context, &frag_def.selection_set, &mut parent)?;
-                Ok(Operation {
+                let mut parent = match ComplexTraversal::try_from((
+                    &context,
+                    type_name.as_ref(),
+                    frag_def.position,
+                )) {
+                    Ok(p) => p,
+                    Err(error) => return Err((vec![error], context.warnings.into_inner())),
+                };
+
+                if let Err(errors) = collect_fields_from_selection_set(
+                    &context,
+                    &frag_def.selection_set,
+                    &mut parent,
+                    ForeignFragmentJumpState::RootLocal,
+                ) {
+                    return Err((errors, context.warnings.into_inner()));
+                }
+
+                let collection = match parent.try_into() {
+                    Ok(c) => c,
+                    Err(error) => return Err((vec![error], context.warnings.into_inner())),
+                };
+                Operation {
                     name: frag_def.name.clone(),
-                    collection: parent.try_into()?,
+                    collection,
                     variables: None,
-                })
+                }
             }
-        }
+        };
+        Ok((operation, context.warnings.into_inner()))
     }
 }
 
 fn build_from_operation<'a>(
     context: &CompileContext<'_>,
     operation: &'a parsed_query::OperationDefinition,
-) -> Result<Operation<'a>> {
-    let (op_type_name, op_name, selection_set, var_defs) = match operation {
+    jump_state: ForeignFragmentJumpState,
+) -> ResultMany<Operation<'a>> {
+    let (op_type_name, op_name, selection_set, var_defs, position) = match operation {
         parsed_query::OperationDefinition::Query(query) => (
             "Query",
             &query.name,
             &query.selection_set,
             &query.variable_definitions,
+            query.position,
         ),
         parsed_query::OperationDefinition::Mutation(mutation) => (
             "Mutation",
             &mutation.name,
             &mutation.selection_set,
             &mutation.variable_definitions,
+            mutation.position,
         ),
-        _ => return Err(Error::OperationUnsupported),
+        parsed_query::OperationDefinition::Subscription(subscription) => {
+            return Err(vec![Error::OperationUnsupported(
+                "Subscription".to_string(),
+                subscription.position,
+            )]);
+        }
+        parsed_query::OperationDefinition::SelectionSet(selection) => {
+            return Err(vec![Error::OperationUnsupported(
+                "SelectionSet".to_string(),
+                selection.span.0,
+            )]);
+        }
     };
-    let mut parent = ComplexTraversal::try_from((context, op_type_name))?;
-    collect_fields_from_selection_set(context, selection_set, &mut parent)?;
+    let mut parent = ComplexTraversal::try_from((context, op_type_name, position))?;
+    collect_fields_from_selection_set(context, selection_set, &mut parent, jump_state)?;
     Ok(Operation {
         name: op_name
             .as_ref()
@@ -366,12 +592,16 @@ fn build_from_operation<'a>(
 }
 
 fn get_type_ir_for_field(
+    field: &schema_field::Field,
     field_type: &schema_field::ConcreteFieldType,
     sub_traversal: FieldTraversal<'_>,
 ) -> Result<FieldType> {
     let field_type_ir = match &field_type.definition {
         schema_field::FieldTypeDefinition::InputObject => {
-            return Err(Error::InputObjectOnSelection)
+            return Err(Error::InputObjectOnSelection {
+                field_name: field.name.clone(),
+                type_name: field_type.name.clone(),
+            });
         }
         schema_field::FieldTypeDefinition::TypeName => FieldType::TypeName,
         schema_field::FieldTypeDefinition::Scalar(scalar) => FieldType::Scalar(scalar.clone()),
@@ -394,32 +624,45 @@ fn insert_field<'a>(
     context: &'a CompileContext<'_>,
     selection_field: &'a parsed_query::Field,
     traversal: &mut ComplexTraversal<'a>,
-) -> Result<()> {
+    jump_state: ForeignFragmentJumpState,
+) -> ResultMany<()> {
     let name = &selection_field.name;
     let alias = selection_field.alias.as_ref().unwrap_or(name);
-    let field = &traversal
-        .fields_lookup
-        .get(name)
-        .ok_or_else(|| Error::UnknownField(traversal.type_name.to_string(), name.to_string()))?;
+    let field = &traversal.fields_lookup.get(name).ok_or_else(|| {
+        vec![Error::UnknownField {
+            parent_type_name: traversal.type_name.to_string(),
+            field_name: name.to_string(),
+            position: selection_field.position,
+            possible_field_names: traversal.fields_lookup.keys().cloned().collect(),
+        }]
+    })?;
     let has_no_sub_selections = selection_field.selection_set.items.is_empty();
     let is_complex = field.type_description.is_complex();
     let name = &field.type_description.reveal_concrete().name[..];
     match (has_no_sub_selections, is_complex) {
-        (true, true) => Err(Error::MissingSelectionSetOnType(name.to_string())),
-        (false, false) => Err(Error::SelectionSetOnWrongType(name.to_string())),
+        (true, true) => Err(vec![Error::MissingSelectionSetOnType(
+            name.to_string(),
+            selection_field.position,
+        )]),
+        (false, false) => Err(vec![Error::SelectionSetOnWrongType(
+            name.to_string(),
+            selection_field.position,
+        )]),
         (true, false) => {
             let terminal = TerminalTraversal::from(name);
-            traversal.insert_terminal(alias, name, field, terminal);
+            traversal.insert_terminal(alias, name, field, terminal)?;
             Ok(())
         }
         (false, true) => {
-            let mut sub_parent = ComplexTraversal::try_from((context, name))?;
+            let mut sub_parent =
+                ComplexTraversal::try_from((context, name, selection_field.position))?;
             collect_fields_from_selection_set(
                 context,
                 &selection_field.selection_set,
                 &mut sub_parent,
+                jump_state,
             )?;
-            traversal.insert_complex(alias, name, field, sub_parent);
+            traversal.insert_complex(alias, name, field, sub_parent)?;
             Ok(())
         }
     }
@@ -429,32 +672,95 @@ fn collect_fields_from_selection_set<'a>(
     context: &'a CompileContext<'_>,
     selection_set: &'a parsed_query::SelectionSet,
     complex_parent: &mut ComplexTraversal<'a>,
-) -> Result<()> {
+    jump_state: ForeignFragmentJumpState,
+) -> ResultMany<()> {
+    let mut errors = Vec::new();
     for selection in &selection_set.items {
-        let (spread_type_name, sub_selection_set) = match selection {
+        let (spread_type_name, spread_position, sub_selection_set, new_jump_state) = match selection
+        {
             parsed_query::Selection::Field(selection_field) => {
-                insert_field(context, &selection_field, complex_parent)?;
+                if let Err(sub_messages) =
+                    insert_field(context, &selection_field, complex_parent, jump_state)
+                {
+                    errors.extend(sub_messages);
+                }
                 continue;
             }
             parsed_query::Selection::InlineFragment(fragment_def) => {
-                let parsed_query::TypeCondition::On(type_name) = fragment_def
-                    .type_condition
-                    .as_ref()
-                    .ok_or_else(|| Error::MissingTypeCondition)?;
-                (type_name, &fragment_def.selection_set)
+                match fragment_def.type_condition {
+                    Some(parsed_query::TypeCondition::On(ref type_name)) => (
+                        type_name,
+                        fragment_def.position,
+                        &fragment_def.selection_set,
+                        jump_state.jump_inline_one_level(),
+                    ),
+                    None => {
+                        errors.push(Error::MissingTypeConditionOnInlineFragment(
+                            fragment_def.position,
+                        ));
+                        continue;
+                    }
+                }
             }
             parsed_query::Selection::FragmentSpread(spread) => {
-                let fragment_def = context
-                    .imported_fragments
-                    .get(&spread.fragment_name)
-                    .ok_or_else(|| Error::UnknownFragment(spread.fragment_name.clone()))?;
-                let parsed_query::TypeCondition::On(type_name) = &fragment_def.type_condition;
-                (type_name, &fragment_def.selection_set)
+                match context.imported_fragments.get(&spread.fragment_name) {
+                    Some(fragment_def) => {
+                        let parsed_query::TypeCondition::On(ref type_name) =
+                            fragment_def.type_condition;
+                        (
+                            type_name,
+                            fragment_def.position,
+                            &fragment_def.selection_set,
+                            jump_state.jump_foreigin_one_level(),
+                        )
+                    }
+                    None => {
+                        errors.push(Error::UnknownFragment(
+                            spread.fragment_name.clone(),
+                            spread.position,
+                            context.imported_fragments.keys().cloned().collect(),
+                        ));
+                        continue;
+                    }
+                }
             }
         };
-        let mut sub_parent = complex_parent.clone_for_type_spread(context, spread_type_name)?;
-        collect_fields_from_selection_set(context, sub_selection_set, &mut sub_parent)?;
-        complex_parent.extend_from(sub_parent);
+        // Below we only add errors when in local file. We don't want to spam duplicate messages
+        // that will just be repeated when we compile the foreign fragment anyway.
+        let mut sub_parent = match complex_parent.clone_for_type_spread(
+            context,
+            spread_type_name,
+            spread_position,
+            new_jump_state,
+        ) {
+            Ok(sp) => sp,
+            Err(sub_message) => {
+                if new_jump_state.is_local() {
+                    errors.push(sub_message);
+                }
+                continue;
+            }
+        };
+        match collect_fields_from_selection_set(
+            context,
+            sub_selection_set,
+            &mut sub_parent,
+            new_jump_state,
+        ) {
+            Ok(_) => {
+                complex_parent.extend_from(sub_parent)?;
+            }
+            Err(sub_messages) => {
+                if new_jump_state.is_local() {
+                    errors.extend(sub_messages);
+                }
+            }
+        }
     }
-    Ok(())
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
 }

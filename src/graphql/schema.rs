@@ -1,7 +1,10 @@
 //! Produce consumable schema from introspection JSON
+use crate::cli::PrintableMessage;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::io::Read;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 
 pub mod field;
 mod json;
@@ -192,4 +195,44 @@ impl Schema {
     pub fn get_type_for_name(&self, name: &str) -> Option<&Type> {
         self.types.get(name)
     }
+}
+
+fn printable_message_error(reason: &str) -> PrintableMessage {
+    PrintableMessage::new_simple_compile_error(&format!("malformed schema: {}", reason))
+}
+
+pub fn parse_schema(path: &Path) -> Result<Schema, Vec<PrintableMessage>> {
+    let file = File::open(path).map_err(|io_error| {
+        let error = PrintableMessage::new_compile_error_from_read_io_error(&io_error, path);
+        vec![error]
+    })?;
+    let reader = BufReader::new(file);
+    Schema::try_from_reader(reader).map_err(|schema_error| {
+        let printable_message = match schema_error {
+            Error::MissingTypeOfForNonNull | Error::MissingTypeOfForList => {
+                printable_message_error("missing type of information on field")
+            }
+            Error::MissingNameForField => printable_message_error("missing name on field"),
+            Error::UnknownType { name, kind } => printable_message_error(&format!(
+                "unknown type defintion `{}` on field `{}`",
+                kind, name
+            )),
+            Error::FieldsMissingForType(name) => {
+                printable_message_error(&format!("complex type `{}` is missing fields", name))
+            }
+            Error::EnumMissingValues(name) => {
+                printable_message_error(&format!("enum `{}` is missing variants", name))
+            }
+            Error::InterfaceMissingTypes(name) => {
+                printable_message_error(&format!("interface `{}` has no implementations", name))
+            }
+            Error::UnionMissingTypes(name) => {
+                printable_message_error(&format!("union `{}` has no implementations", name))
+            }
+            Error::JSONParseError(serde_error) => {
+                printable_message_error(&format!("JSON parse error: {}", serde_error))
+            }
+        };
+        vec![printable_message]
+    })
 }

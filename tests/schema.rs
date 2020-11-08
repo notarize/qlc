@@ -1,14 +1,18 @@
-use super::helpers::qlc_command_with_fake_dir;
+use super::helpers::{contains_read_error, qlc_command_with_fake_dir};
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
-use predicates::str::contains;
+use predicates::str::{contains, is_empty};
 
 #[test]
 fn schema_file_does_not_exist() {
-    qlc_command_with_fake_dir()
-        .0
-        .assert()
-        .stderr(contains("No such file or directory"))
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir();
+    cmd.assert()
+        .stderr(is_empty())
+        .stdout(contains_read_error(
+            &temp_dir,
+            "schema.json",
+            "No such file or directory (os error 2)",
+        ))
         .failure();
 }
 
@@ -19,7 +23,10 @@ fn schema_file_does_not_exist_with_flag() {
         .arg("-s")
         .arg("not-a-real-file.json")
         .assert()
-        .stderr(contains("No such file or directory"))
+        .stdout(contains(
+            "error: could not read `not-a-real-file.json`: No such file or directory (os error 2)",
+        ))
+        .stderr(is_empty())
         .failure();
 }
 
@@ -31,7 +38,8 @@ fn schema_file_invalid_json_syntax() {
     cmd.arg("-s")
         .arg(bad_syntax_file.path())
         .assert()
-        .stderr(contains("JSONParseError"))
+        .stdout(contains("error: malformed schema: JSON parse error: EOF while parsing a value at line 1 column 1"))
+        .stderr(is_empty())
         .failure();
 }
 
@@ -45,6 +53,9 @@ fn schema_file_invalid_schema_json() {
     cmd.arg("-s")
         .arg(unexpected_json_file.path())
         .assert()
-        .stderr(contains("missing field `data`"))
+        .stdout(contains(
+            "error: malformed schema: JSON parse error: missing field `data` at line 1 column 17",
+        ))
+        .stderr(is_empty())
         .failure();
 }

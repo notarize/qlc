@@ -1,6 +1,7 @@
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use predicates::str::contains;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -10,6 +11,34 @@ fn add_no_capture(mut cmd: Command) -> Command {
         cmd.stderr(Stdio::inherit());
     }
     cmd
+}
+
+pub fn contains_read_error(
+    temp_dir: &TempDir,
+    filename: &str,
+    error_str: &str,
+) -> impl predicates::Predicate<str> {
+    contains(format!(
+        "error: could not read `{}`: {}",
+        temp_dir.path().join(filename).display(),
+        error_str,
+    ))
+}
+
+pub fn contains_graphql_filename(
+    temp_dir: &TempDir,
+    filename: &str,
+    position: Option<(usize, usize)>,
+) -> impl predicates::Predicate<str> {
+    let location = match position {
+        Some((line, col)) => format!(":{}:{}", line, col),
+        None => "".to_string(),
+    };
+    contains(format!(
+        "--> {}{}",
+        temp_dir.path().join(filename).display(),
+        location,
+    ))
 }
 
 pub fn qlc_command_with_fake_dir() -> (Command, TempDir) {

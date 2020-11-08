@@ -11,6 +11,8 @@ name = "qlc"
 path = "tests/mod.rs"
 
 [dependencies]
+colored = "2"
+strsim = "0.10"
 crossbeam-channel = "0.3"
 graphql-parser = "0.2"
 serde = { version = "1", features = ["derive"] }

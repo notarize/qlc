@@ -1,10 +1,10 @@
-use super::cli::RuntimeConfig;
+use super::cli::{ExitInformation, PrintableMessage, RuntimeConfig};
 use super::graphql::schema::Schema;
 use super::graphql::{compile_file, compile_global_types_file, CompileConfig};
 use crossbeam_channel as channel;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -17,19 +17,56 @@ enum Message {
 }
 
 #[derive(Debug)]
-pub enum Error {
-    CleanupError,
-    GraphQL(super::graphql::Error),
-    IO(std::io::Error),
+enum WorkResult {
+    MoreWork(Vec<Work>),
+    CompileResult {
+        global_types_used: HashSet<String>,
+        messages: Vec<PrintableMessage>,
+    },
+    DirIOError(std::io::Error, PathBuf),
 }
 
 #[derive(Debug)]
-enum SuccessWorkResult {
-    MoreWork(Vec<Work>),
-    MoreGlobalTypes(HashSet<String>),
+struct WorkAggregateResult {
+    messages: Vec<PrintableMessage>,
+    global_types: HashSet<String>,
 }
 
-type WorkResult = Result<SuccessWorkResult, Error>;
+impl WorkAggregateResult {
+    fn new() -> Self {
+        WorkAggregateResult {
+            messages: Vec::new(),
+            global_types: HashSet::new(),
+        }
+    }
+
+    fn extend_globals(&mut self, new_globals: HashSet<String>) {
+        self.global_types.extend(new_globals);
+    }
+
+    fn extend_messages(&mut self, messages: Vec<PrintableMessage>) {
+        self.messages.extend(messages);
+    }
+
+    fn append_message(&mut self, message: PrintableMessage) {
+        self.messages.push(message);
+    }
+}
+
+impl From<PrintableMessage> for WorkAggregateResult {
+    fn from(message: PrintableMessage) -> Self {
+        WorkAggregateResult {
+            messages: vec![message],
+            global_types: HashSet::new(),
+        }
+    }
+}
+
+impl ExitInformation for WorkAggregateResult {
+    fn messages(&self) -> &[PrintableMessage] {
+        &self.messages
+    }
+}
 
 #[derive(Debug)]
 enum Work {
@@ -38,7 +75,7 @@ enum Work {
 }
 
 impl Work {
-    fn run_dir_entry(&self, path: &PathBuf) -> Result<Vec<Work>, std::io::Error> {
+    fn run_dir_entry(&self, path: &Path) -> Result<Vec<Work>, std::io::Error> {
         let readdir = fs::read_dir(path)?;
         let mut more_work = vec![];
         for raw_entry in readdir {
@@ -56,47 +93,56 @@ impl Work {
         match self {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
-                .map(SuccessWorkResult::MoreWork)
-                .map_err(Error::IO),
+                .map(WorkResult::MoreWork)
+                .unwrap_or_else(|io_error| WorkResult::DirIOError(io_error, path.clone())),
             Work::GraphQL(path) => compile_file(path, config, schema)
-                .map(SuccessWorkResult::MoreGlobalTypes)
-                .map_err(Error::GraphQL),
+                .map(|compile_report| WorkResult::CompileResult {
+                    global_types_used: compile_report.global_types_used,
+                    messages: compile_report.messages,
+                })
+                .unwrap_or_else(|messages| WorkResult::CompileResult {
+                    global_types_used: HashSet::new(),
+                    messages,
+                }),
         }
     }
 }
 
 struct Worker {
+    compile_config: Arc<CompileConfig>,
     schema: Arc<Schema>,
     is_waiting: bool,
     is_quitting: bool,
-    global_types: Arc<Mutex<HashSet<String>>>,
-    errors: Arc<Mutex<Vec<Error>>>,
+    aggregate: Arc<Mutex<WorkAggregateResult>>,
     num_waiting: Arc<AtomicUsize>,
     num_quitting: Arc<AtomicUsize>,
+    thread_count: usize,
     tx: channel::Sender<Message>,
     rx: channel::Receiver<Message>,
-    config: Arc<RuntimeConfig>,
 }
 
 impl Worker {
     fn run(mut self) {
-        let compile_config = CompileConfig::from(&*self.config);
         while let Some(work) = self.pop_work() {
-            match work.run(&compile_config, &self.schema) {
-                Ok(SuccessWorkResult::MoreGlobalTypes(new_globals)) => {
-                    let mut self_globals = self.global_types.lock().unwrap();
-                    for potential_new_global in new_globals.into_iter() {
-                        self_globals.insert(potential_new_global);
-                    }
+            match work.run(&self.compile_config, &self.schema) {
+                WorkResult::CompileResult {
+                    global_types_used,
+                    messages,
+                } => {
+                    let mut aggregate = self.aggregate.lock().unwrap();
+                    aggregate.extend_globals(global_types_used);
+                    aggregate.extend_messages(messages);
                 }
-                Ok(SuccessWorkResult::MoreWork(works)) => {
-                    for work in works {
+                WorkResult::MoreWork(additional_work) => {
+                    for work in additional_work {
                         self.tx.send(Message::Work(work)).unwrap();
                     }
                 }
-                Err(e) => {
-                    let mut all_errors = self.errors.lock().unwrap();
-                    all_errors.push(e);
+                WorkResult::DirIOError(io_error, path) => {
+                    let mut aggregate = self.aggregate.lock().unwrap();
+                    aggregate.append_message(
+                        PrintableMessage::new_compile_error_from_read_io_error(&io_error, &path),
+                    );
                 }
             }
         }
@@ -116,7 +162,7 @@ impl Worker {
                     loop {
                         let nwait = self.num_waiting();
                         let nquit = self.num_quitting();
-                        let threads = self.config.thread_count();
+                        let threads = self.thread_count;
                         // If the number of waiting workers dropped, then abort our attempt to quit.
                         // Sometimes work will come back.
                         if nwait < threads {
@@ -129,7 +175,7 @@ impl Worker {
                     }
                 }
                 Err(_) => {
-                    let threads = self.config.thread_count();
+                    let threads = self.thread_count;
                     self.set_waiting(true);
                     self.set_quitting(false);
                     if self.num_waiting() == threads {
@@ -176,40 +222,43 @@ impl Worker {
 }
 
 pub struct WorkerPool {
-    config: Arc<RuntimeConfig>,
+    compile_config: Arc<CompileConfig>,
+    root_dir_path: PathBuf,
     schema: Arc<Schema>,
+    thread_count: usize,
 }
 
 impl WorkerPool {
-    pub fn new(config: RuntimeConfig, schema: Schema) -> Self {
+    pub fn new(runtime_config: RuntimeConfig, schema: Schema) -> Self {
         WorkerPool {
-            config: Arc::new(config),
+            compile_config: Arc::new(CompileConfig::from(&runtime_config)),
+            root_dir_path: runtime_config.root_dir_path(),
             schema: Arc::new(schema),
+            thread_count: runtime_config.thread_count(),
         }
     }
 
-    pub fn work(&self) -> Result<(), Vec<Error>> {
-        let global_types = Arc::new(Mutex::new(HashSet::new()));
-        let errors = Arc::new(Mutex::new(Vec::new()));
+    pub fn work(&self) -> impl ExitInformation {
+        let aggregate = Arc::new(Mutex::new(WorkAggregateResult::new()));
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicUsize::new(0));
         let num_quitting = Arc::new(AtomicUsize::new(0));
-        let mut handles = vec![];
-        let initial_work = Work::DirEntry(self.config.root_dir_path());
+        let mut handles = Vec::with_capacity(self.thread_count);
+        let initial_work = Work::DirEntry(self.root_dir_path.clone());
         let root = Message::Work(initial_work);
         tx.send(root).unwrap();
-        for _ in 0..self.config.thread_count() {
+        for _ in 0..self.thread_count {
             let worker = Worker {
-                errors: errors.clone(),
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
-                global_types: global_types.clone(),
+                aggregate: aggregate.clone(),
                 is_quitting: false,
                 is_waiting: false,
                 tx: tx.clone(),
                 rx: rx.clone(),
-                config: self.config.clone(),
+                compile_config: self.compile_config.clone(),
+                thread_count: self.thread_count,
             };
             let handle = thread::spawn(|| worker.run());
             handles.push(handle);
@@ -220,23 +269,26 @@ impl WorkerPool {
             handle.join().unwrap();
         }
 
-        let global_types = global_types.lock().unwrap();
-        let mut errors = Arc::try_unwrap(errors)
-            .map_err(|_| vec![Error::CleanupError])?
-            .into_inner()
-            .map_err(|_| vec![Error::CleanupError])?;
+        let mut unlocked_work_aggregate = match Arc::try_unwrap(aggregate) {
+            Ok(agg_mutex) => match agg_mutex.into_inner() {
+                Ok(u) => u,
+                Err(_) => WorkAggregateResult::from(PrintableMessage::new_simple_program_error(
+                    "failed to unlock mutex in finality",
+                )),
+            },
+            Err(_) => WorkAggregateResult::from(PrintableMessage::new_simple_program_error(
+                "failed to unwrap arc in finality",
+            )),
+        };
         if let Err(global_type_error) = compile_global_types_file(
-            &self.config.root_dir_path(),
-            &CompileConfig::from(&*self.config),
+            &self.root_dir_path,
+            &self.compile_config,
             &self.schema,
-            &global_types,
+            &unlocked_work_aggregate.global_types,
         ) {
-            errors.push(Error::GraphQL(global_type_error));
+            unlocked_work_aggregate.append_message(global_type_error);
         }
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+
+        unlocked_work_aggregate
     }
 }

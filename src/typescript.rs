@@ -3,6 +3,7 @@ use super::graphql::schema;
 use super::graphql::schema::field as schema_field;
 use super::graphql::variable;
 use super::graphql::{BottomTypeConfig, CompileConfig};
+use crate::cli::PrintableMessage;
 use field::compile_scalar;
 use std::collections::{HashMap, HashSet};
 
@@ -18,9 +19,38 @@ const HEADER: &str = "/* tslint:disable */
 pub enum Error {
     MissingType(String),
     NotGlobalType(String),
-    InvalidFieldDef(String),
-    OutputInInput(String),
+    InvalidFieldDef {
+        field_type_name: String,
+        field_name: String,
+    },
     ExpectedAtLeastOnePossibility,
+}
+
+impl From<Error> for PrintableMessage {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::MissingType(type_name) => PrintableMessage::new_simple_program_error(&format!(
+                "failed lookup of type `{}`",
+                type_name
+            )),
+            Error::NotGlobalType(type_name) => {
+                PrintableMessage::new_simple_program_error(&format!(
+                    "unexpected global type of `{}`, which is not an enum nor input object",
+                    type_name
+                ))
+            }
+            Error::InvalidFieldDef {
+                field_name,
+                field_type_name,
+            } => PrintableMessage::new_simple_program_error(&format!(
+                "unexpected field `{}` of type `{}`: must be enum, another input object, or scalar",
+                field_name, field_type_name,
+            )),
+            Error::ExpectedAtLeastOnePossibility => PrintableMessage::new_simple_program_error(
+                "could not determine possiblities for complex type",
+            ),
+        }
+    }
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -37,7 +67,7 @@ pub struct GlobalTypesCompile {
 pub struct Compile {
     pub filename: String,
     pub contents: String,
-    pub used_global_types: HashSet<String>,
+    pub global_types_used: HashSet<String>,
 }
 
 fn from_input_def_field_def(
@@ -50,7 +80,12 @@ fn from_input_def_field_def(
         schema_field::FieldTypeDefinition::Scalar(sc_type) => compile_scalar(config, &sc_type),
         schema_field::FieldTypeDefinition::Enum => concrete.name.to_string(),
         schema_field::FieldTypeDefinition::InputObject => concrete.name.to_string(),
-        _ => return Err(Error::InvalidFieldDef(field_name.to_string())),
+        _ => {
+            return Err(Error::InvalidFieldDef {
+                field_type_name: concrete.name.clone(),
+                field_name: field_name.to_string(),
+            })
+        }
     };
     Ok(output)
 }
@@ -71,8 +106,8 @@ fn input_def_from_type(
     for (name, field) in fields_iter {
         let doc = compile_documentation(&field.documentation, 2);
         let field_type = from_input_def_field_def(config, name, &field)?;
-        // TODO will this every be more than one item?
-        let ts_field = match field.type_description.type_modifier_iter().last().unwrap() {
+        let (_, last_type_mod) = field.type_description.type_modifiers();
+        let ts_field = match last_type_mod {
             schema_field::FieldTypeModifier::None => format!("  {}{}: {};", doc, name, field_type),
             schema_field::FieldTypeModifier::Nullable => {
                 format!("  {}{}?: {} | null;", doc, name, field_type)
@@ -150,7 +185,12 @@ fn add_sub_input_object_field<'a>(
             name_to_type.insert(type_name, global_type);
         }
         schema_field::FieldTypeDefinition::Scalar(_) => {}
-        _ => return Err(Error::OutputInInput(field_name.to_string())),
+        _ => {
+            return Err(Error::InvalidFieldDef {
+                field_type_name: type_name.clone(),
+                field_name: field_name.to_string(),
+            })
+        }
     }
     Ok(())
 }
@@ -393,7 +433,7 @@ fn type_definitions_from_complex_ir<'a>(
             ir::FieldType::Scalar(scalar_type) => type_name_from_scalar(config, &scalar_type),
             ir::FieldType::TypeName => format!("\"{}\"", complex_ir.name),
         };
-        let prop_def_type = prop_type_def(&field_ir.type_modifiers.last().unwrap(), flat_type_name);
+        let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);
         let doc_comment = compile_documentation(&field_ir.documentation, 2);
         prop_defs.push(format!(
             "  {}{}: {};",
@@ -414,8 +454,9 @@ fn compile_variables_type_definition(
     global_types: &mut HashSet<String>,
     op_ir: &ir::Operation<'_>,
 ) -> Result<Typescript> {
-    let def = match &op_ir.variables {
-        Some(var_irs) => {
+    match op_ir.variables {
+        None => Ok("".to_string()),
+        Some(ref var_irs) => {
             let prop_defs: Result<Vec<_>> = var_irs
                 .iter()
                 .map(|var_ir| {
@@ -455,15 +496,15 @@ fn compile_variables_type_definition(
                     Ok(compiled)
                 })
                 .collect();
-            format!(
-                "\n\nexport type {}Variables = {{\n{}\n}};",
-                op_ir.name,
-                prop_defs?.join("\n")
-            )
+            prop_defs.map(|prop_defs| {
+                format!(
+                    "\n\nexport type {}Variables = {{\n{}\n}};",
+                    op_ir.name,
+                    prop_defs.join("\n")
+                )
+            })
         }
-        None => "".into(),
-    };
-    Ok(def)
+    }
 }
 
 fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
@@ -489,16 +530,16 @@ pub fn compile_ir(
     config: &CompileConfig,
     schema: &schema::Schema,
 ) -> Result<Compile> {
-    let mut used_global_types = HashSet::new();
+    let mut global_types_used = HashSet::new();
     let type_definitions = type_definitions_from_complex_field_collection(
         config,
-        &mut used_global_types,
+        &mut global_types_used,
         &op_ir.collection,
         &op_ir.name,
     )?;
     let variable_type_def =
-        compile_variables_type_definition(config, schema, &mut used_global_types, op_ir)?;
-    let imports = compile_imports(&used_global_types);
+        compile_variables_type_definition(config, schema, &mut global_types_used, op_ir)?;
+    let imports = compile_imports(&global_types_used);
     Ok(Compile {
         filename: format!("{}.ts", op_ir.name),
         contents: format!(
@@ -508,6 +549,6 @@ pub fn compile_ir(
             type_definitions.join("\n\n"),
             variable_type_def
         ),
-        used_global_types,
+        global_types_used,
     })
 }

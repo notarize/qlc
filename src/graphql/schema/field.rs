@@ -131,10 +131,9 @@ impl FieldType {
         }
     }
 
-    pub fn type_modifier_iter(&self) -> impl Iterator<Item = &FieldTypeModifier> {
-        self.higher_order_modifiers
-            .iter()
-            .chain(std::iter::once(&self.concrete.modifier))
+    pub fn type_modifiers(&self) -> (impl Iterator<Item = &FieldTypeModifier>, &FieldTypeModifier) {
+        // TODO we do not support higher order type modifiers in output
+        (self.higher_order_modifiers.iter(), &self.concrete.modifier)
     }
 
     pub fn reveal_concrete(&self) -> &ConcreteFieldType {
