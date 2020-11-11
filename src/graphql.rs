@@ -13,6 +13,8 @@ pub mod variable;
 
 const IMPORT_START: &str = "#import \"";
 
+pub type ParsedTextType = String;
+
 #[derive(Debug)]
 pub struct CompileReport {
     pub messages: Vec<PrintableMessage>,
@@ -52,7 +54,10 @@ fn read_graphql_file(path: &Path) -> Result<String, PrintableMessage> {
         .map_err(|io_error| PrintableMessage::new_compile_error_from_read_io_error(&io_error, path))
 }
 
-fn parse_graphql_file(contents: &str, file_path: &Path) -> Result<Document, PrintableMessage> {
+fn parse_graphql_file<'a, 'b>(
+    contents: &'a str,
+    file_path: &'b Path,
+) -> Result<Document<'a, ParsedTextType>, PrintableMessage> {
     let parsed = graphql_parser::parse_query(contents).map_err(|parse_error| {
         // TODO parse error has no line/column information
         let mut error = PrintableMessage::new_simple_compile_error(&format!("{}", parse_error));
@@ -112,15 +117,15 @@ fn get_file_path_of_fragment(import_comment: &str, current_dir: &Path, root_dir:
 }
 
 fn add_imported_fragments(
-    current_file: &Path,
-    imports: &mut HashMap<String, FragmentDefinition>,
-    messages: &mut Vec<PrintableMessage>,
-    contents: &str,
     root_dir: &Path,
+    current_file: &Path,
+    current_file_contents: &str,
+    import_contents: &mut HashMap<PathBuf, (String, LocationInformation)>,
+    messages: &mut Vec<PrintableMessage>,
 ) {
     let mut current_dir = current_file.to_owned();
     current_dir.pop();
-    for (line_index, line) in contents.lines().enumerate() {
+    for (line_index, line) in current_file_contents.lines().enumerate() {
         if line.is_empty() || line.trim().is_empty() {
             continue;
         }
@@ -135,7 +140,7 @@ fn add_imported_fragments(
         let location =
             LocationInformation::new_from_line_and_column(line_index + 1, line, IMPORT_START.len());
         let file_path = get_file_path_of_fragment(line, &current_dir, root_dir);
-        let contents = match read_graphql_file(&file_path) {
+        let other_file_contents = match read_graphql_file(&file_path) {
             Ok(c) => c,
             Err(mut sub_message) => {
                 sub_message.with_source_information(current_file, Some(location));
@@ -143,38 +148,48 @@ fn add_imported_fragments(
                 continue;
             }
         };
-        match parse_graphql_file(&contents, &file_path) {
-            Ok(mut parsed) => {
-                add_imported_fragments(&file_path, imports, messages, &contents, root_dir);
-                for def in parsed.definitions.drain(0..1) {
-                    match def {
-                        Definition::Fragment(f_def) => {
-                            let fragment_name = f_def.name.clone();
-                            imports.insert(fragment_name, f_def);
-                        }
-                        _ => {
-                            let mut message = PrintableMessage::new_simple_compile_error(&format!(
-                                "cannot import non-fragment GraphQL document `{}`",
-                                file_path.display()
-                            ));
-                            let mut location = LocationInformation::new_from_line_and_column(
-                                line_index + 1,
-                                line,
-                                IMPORT_START.len(),
-                            );
-                            location.with_help_text("This document is not a fragment, and importing it is probably a mistake.");
-                            message.with_source_information(current_file, Some(location));
-                            messages.push(message);
-                        }
+        add_imported_fragments(
+            root_dir,
+            &file_path,
+            &other_file_contents,
+            import_contents,
+            messages,
+        );
+        import_contents.insert(file_path, (other_file_contents, location));
+    }
+}
+
+fn parse_foreign_fragments<'a>(
+    path: &Path,
+    imported_contents: &'a HashMap<PathBuf, (String, LocationInformation)>,
+    messages: &mut Vec<PrintableMessage>,
+) -> HashMap<String, FragmentDefinition<'a, ParsedTextType>> {
+    let mut parsed_imported_fragments = HashMap::new();
+    for (other_path, (contents, location)) in imported_contents.iter() {
+        if let Ok(mut parsed) = parse_graphql_file(&contents, &other_path) {
+            // We already know there is exactly one definition since read_graphql_file
+            // throws away documents that contain more or less than one defintion.
+            for def in parsed.definitions.drain(0..1) {
+                match def {
+                    Definition::Fragment(f_def) => {
+                        let fragment_name = f_def.name.clone();
+                        parsed_imported_fragments.insert(fragment_name, f_def);
+                    }
+                    _ => {
+                        let mut message = PrintableMessage::new_simple_compile_error(&format!(
+                            "cannot import non-fragment GraphQL document `{}`",
+                            path.display()
+                        ));
+                        let mut location = location.clone();
+                        location.with_help_text("This document is not a fragment, and importing it is probably a mistake.");
+                        message.with_source_information(path, Some(location));
+                        messages.push(message);
                     }
                 }
             }
-            Err(mut sub_message) => {
-                sub_message.with_source_information(current_file, Some(location));
-                messages.push(sub_message);
-            }
         }
     }
+    parsed_imported_fragments
 }
 
 pub fn compile_file(
@@ -186,14 +201,16 @@ pub fn compile_file(
     let parsed = parse_graphql_file(&contents, path).map_err(|e| vec![e])?;
 
     let mut messages = Vec::new();
-    let mut parsed_imported_fragments = HashMap::new();
+    let mut imported_contents = HashMap::new();
     add_imported_fragments(
-        &path,
-        &mut parsed_imported_fragments,
-        &mut messages,
-        &contents,
         &config.root_dir,
+        &path,
+        &contents,
+        &mut imported_contents,
+        &mut messages,
     );
+    let parsed_imported_fragments =
+        parse_foreign_fragments(&path, &imported_contents, &mut messages);
 
     let (op_ir, warnings) =
         match ir::Operation::compile(&parsed.definitions[0], schema, parsed_imported_fragments) {

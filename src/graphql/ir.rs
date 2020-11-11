@@ -1,3 +1,4 @@
+use super::ParsedTextType;
 use crate::cli::{similar_help_suggestions, PrintableMessage};
 use crate::graphql::schema;
 use crate::graphql::schema::field as schema_field;
@@ -198,11 +199,11 @@ type Result<T> = std::result::Result<T, Error>;
 type ResultMany<T> = std::result::Result<T, Vec<Error>>;
 type OperationResult<'a> =
     std::result::Result<(Operation<'a>, Vec<Warning>), (Vec<Error>, Vec<Warning>)>;
-type ImportedFragments = HashMap<String, parsed_query::FragmentDefinition>;
+type ImportedFragments<'a> = HashMap<String, parsed_query::FragmentDefinition<'a, ParsedTextType>>;
 
-struct CompileContext<'a> {
+struct CompileContext<'a, 'b> {
     schema: &'a schema::Schema,
-    imported_fragments: ImportedFragments,
+    imported_fragments: ImportedFragments<'b>,
     warnings: std::cell::RefCell<Vec<Warning>>,
 }
 
@@ -301,10 +302,10 @@ struct ComplexTraversal<'a> {
     concrete_objects: HashMap<&'a str, UniqueFields<'a>>,
 }
 
-impl<'a> ComplexTraversal<'a> {
+impl<'a, 'b> ComplexTraversal<'a> {
     fn clone_for_type_spread(
         &self,
-        context: &'a CompileContext<'_>,
+        context: &'a CompileContext<'a, 'b>,
         spread_type_name: &'a str,
         position: Pos,
         jump_state: ForeignFragmentJumpState,
@@ -396,10 +397,10 @@ impl<'a> TryFrom<ComplexTraversal<'a>> for ComplexCollection {
     }
 }
 
-impl<'a> TryFrom<(&'a CompileContext<'a>, &'a str, Pos)> for ComplexTraversal<'a> {
+impl<'a, 'b> TryFrom<(&'a CompileContext<'a, 'b>, &'a str, Pos)> for ComplexTraversal<'a> {
     type Error = Error;
     fn try_from(
-        (context, type_name, position): (&'a CompileContext<'_>, &'a str, Pos),
+        (context, type_name, position): (&'a CompileContext<'a, 'b>, &'a str, Pos),
     ) -> Result<Self> {
         let schema_type = context
             .schema
@@ -495,9 +496,9 @@ pub struct Operation<'a> {
 
 impl<'a, 'b> Operation<'a> {
     pub fn compile(
-        definition: &'a parsed_query::Definition,
+        definition: &'a parsed_query::Definition<'a, ParsedTextType>,
         schema: &'b schema::Schema,
-        imported_fragments: ImportedFragments,
+        imported_fragments: ImportedFragments<'a>,
     ) -> OperationResult<'a> {
         let context = CompileContext {
             schema,
@@ -546,11 +547,11 @@ impl<'a, 'b> Operation<'a> {
     }
 }
 
-fn build_from_operation<'a>(
-    context: &CompileContext<'_>,
-    operation: &'a parsed_query::OperationDefinition,
+fn build_from_operation<'a, 'b>(
+    context: &CompileContext<'a, 'b>,
+    operation: &'b parsed_query::OperationDefinition<'b, ParsedTextType>,
     jump_state: ForeignFragmentJumpState,
-) -> ResultMany<Operation<'a>> {
+) -> ResultMany<Operation<'b>> {
     let (op_type_name, op_name, selection_set, var_defs, position) = match operation {
         parsed_query::OperationDefinition::Query(query) => (
             "Query",
@@ -620,9 +621,9 @@ fn get_type_ir_for_field(
     Ok(field_type_ir)
 }
 
-fn insert_field<'a>(
-    context: &'a CompileContext<'_>,
-    selection_field: &'a parsed_query::Field,
+fn insert_field<'a, 'b>(
+    context: &'a CompileContext<'a, 'b>,
+    selection_field: &'a parsed_query::Field<'b, ParsedTextType>,
     traversal: &mut ComplexTraversal<'a>,
     jump_state: ForeignFragmentJumpState,
 ) -> ResultMany<()> {
@@ -668,9 +669,9 @@ fn insert_field<'a>(
     }
 }
 
-fn collect_fields_from_selection_set<'a>(
-    context: &'a CompileContext<'_>,
-    selection_set: &'a parsed_query::SelectionSet,
+fn collect_fields_from_selection_set<'a, 'b>(
+    context: &'a CompileContext<'a, 'b>,
+    selection_set: &'a parsed_query::SelectionSet<'b, ParsedTextType>,
     complex_parent: &mut ComplexTraversal<'a>,
     jump_state: ForeignFragmentJumpState,
 ) -> ResultMany<()> {

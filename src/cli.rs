@@ -13,7 +13,7 @@ enum MessageLevel {
     ProgramError,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocationInformation {
     line_number: String,
     line: String,

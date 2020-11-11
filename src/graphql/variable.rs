@@ -1,3 +1,4 @@
+use super::ParsedTextType;
 use crate::cli::PrintableMessage;
 use crate::graphql::schema::field as schema_field;
 use graphql_parser::query as parsed_query;
@@ -70,7 +71,7 @@ pub struct Variable<'a> {
 }
 
 pub fn try_build_variable_ir<'a>(
-    defs: &'a [parsed_query::VariableDefinition],
+    defs: &'a [parsed_query::VariableDefinition<'_, ParsedTextType>],
 ) -> Result<Option<Vec<Variable<'a>>>> {
     if defs.is_empty() {
         return Ok(None);
@@ -88,9 +89,9 @@ pub fn try_build_variable_ir<'a>(
         .map(Some)
 }
 
-fn unwrap_var_def(
-    var_def: &parsed_query::VariableDefinition,
-) -> Result<(schema_field::FieldTypeModifier, &str)> {
+fn unwrap_var_def<'a, 'b>(
+    var_def: &'a parsed_query::VariableDefinition<'b, ParsedTextType>,
+) -> Result<(schema_field::FieldTypeModifier, &'a str)> {
     let (type_mod, name) = match &var_def.var_type {
         parsed_query::Type::NamedType(name) => (schema_field::FieldTypeModifier::Nullable, name),
         parsed_query::Type::NonNullType(inner_type) => match inner_type.as_ref() {
