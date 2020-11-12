@@ -1,3 +1,20 @@
+## [0.6.0](https://github.com/notarize/qlc/compare/0.5.0...0.6.0)
+
+### Features
+
+- Improve error CLI messages
+- Add support for warning CLI messages
+- Add download schema script to NPM package
+
+### Bugfixes
+
+- Reduce `unwrap`/`expect`/`panic!` calls for more robustness in failure modes
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.47
+  - Includes major upgrade of `graphql-parser` and `crossbeam-channel`
+
 ## [0.5.0](https://github.com/notarize/qlc/compare/0.4.0...0.5.0)
 
 ### Bugfixes

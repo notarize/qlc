@@ -1,6 +1,6 @@
 [package]
 name = "qlc"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Eric Butler <eric.butler@notarize.com>"]
 edition = "2018"
 license = "MIT"
