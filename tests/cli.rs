@@ -73,6 +73,50 @@ fn compile_with_unparseable_graphql() {
 }
 
 #[test]
+fn compile_with_narrowing() {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    temp_dir
+        .child("meeting_fragment.graphql")
+        .write_str("fragment externalSpreadOnMeeting on Meeting { id }")
+        .unwrap();
+    temp_dir
+        .child("file.graphql")
+        .write_str(
+            r#"
+#import "./meeting_fragment.graphql"
+query Narrowing {
+  viewer {
+    id
+    ...externalSpreadOnMeeting
+    ... on User {
+      id
+    }
+  }
+}
+"#,
+        )
+        .unwrap();
+    let assertion_external = contains("= help: The parent types of this spread are limited to `Viewer`, making spreading `Meeting` uneeded.")
+      .and(contains("6 |     ...externalSpreadOnMeeting\n  |        ^"))
+      .and(contains_graphql_filename(
+            &temp_dir,
+            "file.graphql",
+            Some((6, 8)),
+        ));
+    let assertion_inline = contains("= help: The parent types of this spread are limited to `Viewer`, making spreading `User` uneeded.")
+      .and(contains("7 |     ... on User {\n  |         ^"))
+      .and(contains_graphql_filename(
+            &temp_dir,
+            "file.graphql",
+            Some((7, 9)),
+        ));
+    cmd.assert()
+        .success()
+        .stdout(assertion_inline.and(assertion_external))
+        .stderr(is_empty());
+}
+
+#[test]
 fn compile_with_non_schema_matching_graphql() {
     let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
     temp_dir

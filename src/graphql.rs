@@ -67,7 +67,7 @@ fn parse_graphql_file<'a, 'b>(
     let num_defintions = parsed.definitions.len();
     if num_defintions == 0 {
         let message =
-            PrintableMessage::new_simple_compile_error("missing defintion in the document.");
+            PrintableMessage::new_simple_compile_error("missing defintion in the document");
         return Err(message);
     } else if num_defintions > 1 {
         let mut message =
@@ -82,7 +82,7 @@ fn parse_graphql_file<'a, 'b>(
             Definition::Fragment(frag) => &frag.position,
         };
         let mut location = LocationInformation::new_from_contents_and_position(contents, position);
-        location.with_help_text("QLC does not support documents with more than one fragment, query or mutation per file. Move this defintion to a seperate file and import it instead.");
+        location.with_help_text("QLC does not support documents with more than one fragment, query or mutation per file. Move this definition to a seperate file and import it instead.");
         message.with_source_information(file_path, Some(location));
         return Err(message);
     }

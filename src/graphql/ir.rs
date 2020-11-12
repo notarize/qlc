@@ -32,7 +32,7 @@ impl From<(&str, &Path, Warning)> for PrintableMessage {
                 contents,
                 &position,
                 Some(&format!(
-                    "The parent fragments of this spread only allow `{}`, making spreading `{}` uneeded.",
+                    "The parent types of this spread are limited to `{}`, making spreading `{}` uneeded.",
                     possible_types.join("`, `"),
                     spread_type_name,
                 )),
@@ -110,21 +110,18 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                     file_path,
                     contents,
                     &position,
-                    Some("QLC does not support this type of operation in a GraphQL document."
-                    ),
+                    Some("QLC does not support this type of operation in a GraphQL document."),
                 )
             }
             Error::UnknownFragment(name, position, possible_spread_names) => {
-                let extra = match similar_help_suggestions(&name, possible_spread_names.into_iter()) {
-                    None => " Did you forget to import it?".to_string(),
-                    Some(s) => s,
-                };
+                let extra = similar_help_suggestions(&name, possible_spread_names.into_iter())
+                    .unwrap_or_else(|| " Did you forget to import it?".to_string());
                 PrintableMessage::new_compile_error(
                     &format!("unknown spread fragment name `{}`", name),
                     file_path,
                     contents,
                     &position,
-                    Some(&format!("This fragment name doesn't appeart to be in scope.{}", extra)),
+                    Some(&format!("This fragment name doesn't appear to be in scope.{}", extra)),
                 )
             }
             Error::MissingTypeConditionOnInlineFragment(position) => PrintableMessage::new_compile_error(
@@ -139,9 +136,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 file_path,
                 contents,
                 &position,
-                Some(
-                    "This field has no possible selections. Did you accidentaly place the curlies on this field?"
-                ),
+                Some("This field is not a complex type with selections. Did you accidentally place the curlies on this field?"),
             ),
             Error::MissingSelectionSetOnType(name, position) => {
                 PrintableMessage::new_compile_error(
@@ -149,7 +144,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                     file_path,
                     contents,
                     &position,
-                    Some("This is a complex type, and it is improper GraphQL not to have at least one sub field selection."),
+                    Some("This is a complex type, and it is improper GraphQL to not have at least one sub field selection."),
                 )
             }
             Error::UnknownField {
@@ -158,10 +153,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 position,
                 possible_field_names,
             } => {
-                let extra = match similar_help_suggestions(&field_name, possible_field_names.into_iter()) {
-                    None => "".to_string(),
-                    Some(s) => s,
-                };
+                let extra = similar_help_suggestions(&field_name, possible_field_names.into_iter()).unwrap_or_else(String::new);
                 PrintableMessage::new_compile_error(
                     &format!("unknown field `{}`", field_name),
                     file_path,
@@ -639,31 +631,31 @@ fn insert_field<'a, 'b>(
     })?;
     let has_no_sub_selections = selection_field.selection_set.items.is_empty();
     let is_complex = field.type_description.is_complex();
-    let name = &field.type_description.reveal_concrete().name[..];
+    let field_type_name = &field.type_description.reveal_concrete().name[..];
     match (has_no_sub_selections, is_complex) {
         (true, true) => Err(vec![Error::MissingSelectionSetOnType(
-            name.to_string(),
+            field_type_name.to_string(),
             selection_field.position,
         )]),
         (false, false) => Err(vec![Error::SelectionSetOnWrongType(
-            name.to_string(),
+            field_type_name.to_string(),
             selection_field.position,
         )]),
         (true, false) => {
-            let terminal = TerminalTraversal::from(name);
-            traversal.insert_terminal(alias, name, field, terminal)?;
+            let terminal = TerminalTraversal::from(field_type_name);
+            traversal.insert_terminal(alias, field_type_name, field, terminal)?;
             Ok(())
         }
         (false, true) => {
             let mut sub_parent =
-                ComplexTraversal::try_from((context, name, selection_field.position))?;
+                ComplexTraversal::try_from((context, field_type_name, selection_field.position))?;
             collect_fields_from_selection_set(
                 context,
                 &selection_field.selection_set,
                 &mut sub_parent,
                 jump_state,
             )?;
-            traversal.insert_complex(alias, name, field, sub_parent)?;
+            traversal.insert_complex(alias, field_type_name, field, sub_parent)?;
             Ok(())
         }
     }
@@ -710,7 +702,7 @@ fn collect_fields_from_selection_set<'a, 'b>(
                             fragment_def.type_condition;
                         (
                             type_name,
-                            fragment_def.position,
+                            spread.position,
                             &fragment_def.selection_set,
                             jump_state.jump_foreigin_one_level(),
                         )
