@@ -1,3 +1,9 @@
+## [0.6.1](https://github.com/notarize/qlc/compare/0.6.0...0.6.1)
+
+### Bugfixes
+
+- Add missing binary NPM link in package
+
 ## [0.6.0](https://github.com/notarize/qlc/compare/0.5.0...0.6.0)
 
 ### Features
@@ -13,6 +19,7 @@
 ### Chores
 
 - Upgrade dependencies and Rust to 1.47
+
   - Includes major upgrade of `graphql-parser` and `crossbeam-channel`
 
 ## [0.5.0](https://github.com/notarize/qlc/compare/0.4.0...0.5.0)
