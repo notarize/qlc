@@ -405,7 +405,7 @@ pub fn similar_help_suggestions(
     let comparison_name = comparison_name.as_ref();
     let similar_names: Vec<_> = possible_names
         .filter(|possible_field_name| {
-            generic_damerau_levenshtein(comparison_name, possible_field_name.as_ref()) < 5
+            generic_damerau_levenshtein(comparison_name, possible_field_name.as_ref()) < 3
         })
         .collect();
     if similar_names.is_empty() {
