@@ -44,6 +44,44 @@ export type TestQuery = {
 }
 
 #[test]
+fn compile_simple_subscription() {
+    basic_success_assert(
+        "
+subscription TestSubscription {
+  viewer {
+    me: user {
+      id
+    }
+    id
+  }
+}
+    ",
+        "TestSubscription.ts",
+        "
+export type TestSubscription_viewer_me = {
+  id: string;
+};
+
+export type TestSubscription_viewer = {
+  id: string;
+  /**
+   * The user associated with the current viewer. Use this field to get info
+   * about current viewer and access any records associated w/ their account.
+   */
+  me: TestSubscription_viewer_me | null;
+};
+
+export type TestSubscription = {
+  /**
+   * Access to fields relevant to a consumer of the application
+   */
+  viewer: TestSubscription_viewer | null;
+};
+    ",
+    );
+}
+
+#[test]
 fn compile_typename() {
     basic_success_assert(
         "

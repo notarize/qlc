@@ -76,7 +76,7 @@ impl ForeignFragmentJumpState {
 
 #[derive(Debug)]
 pub enum Error {
-    OperationUnsupported(String, Pos),
+    SelectionSetAsOperationUnsupported(Pos),
     UnknownFragment(String, Pos, Vec<String>),
     MissingTypeConditionOnInlineFragment(Pos),
     SelectionSetOnWrongType(String, Pos),
@@ -103,14 +103,13 @@ pub enum Error {
 impl From<(&str, &Path, Error)> for PrintableMessage {
     fn from((contents, file_path, error): (&str, &Path, Error)) -> Self {
         match error {
-            Error::OperationUnsupported(operation_type, position) => {
-                // TODO this will get better after we support subscriptions
+            Error::SelectionSetAsOperationUnsupported(position) => {
                 PrintableMessage::new_compile_error(
-                    &format!("unsupported operation `{}`", operation_type),
+                    "unsupported selection set as operation",
                     file_path,
                     contents,
                     &position,
-                    Some("QLC does not support this type of operation in a GraphQL document."),
+                    Some("QLC does not support a plain selection set as an operation."),
                 )
             }
             Error::UnknownFragment(name, position, possible_spread_names) => {
@@ -534,8 +533,10 @@ fn build_from_operation<'a, 'b>(
     operation: &'b parsed_query::OperationDefinition<'b, ParsedTextType>,
     jump_state: ForeignFragmentJumpState,
 ) -> ResultMany<Operation<'b>> {
-    let (op_type_name, op_name, selection_set, var_defs, position) = match operation {
+    let (op_type_name, fallback_name, op_name, selection_set, var_defs, position) = match operation
+    {
         parsed_query::OperationDefinition::Query(query) => (
+            "Query",
             "Query",
             &query.name,
             &query.selection_set,
@@ -544,20 +545,22 @@ fn build_from_operation<'a, 'b>(
         ),
         parsed_query::OperationDefinition::Mutation(mutation) => (
             "Mutation",
+            "Mutation",
             &mutation.name,
             &mutation.selection_set,
             &mutation.variable_definitions,
             mutation.position,
         ),
-        parsed_query::OperationDefinition::Subscription(subscription) => {
-            return Err(vec![Error::OperationUnsupported(
-                "Subscription".to_string(),
-                subscription.position,
-            )]);
-        }
+        parsed_query::OperationDefinition::Subscription(subscription) => (
+            "Query", // We look in query as our type for subscriptions
+            "Subscription",
+            &subscription.name,
+            &subscription.selection_set,
+            &subscription.variable_definitions,
+            subscription.position,
+        ),
         parsed_query::OperationDefinition::SelectionSet(selection) => {
-            return Err(vec![Error::OperationUnsupported(
-                "SelectionSet".to_string(),
+            return Err(vec![Error::SelectionSetAsOperationUnsupported(
                 selection.span.0,
             )]);
         }
@@ -568,7 +571,7 @@ fn build_from_operation<'a, 'b>(
         name: op_name
             .as_ref()
             .cloned()
-            .unwrap_or_else(|| op_type_name.to_string()),
+            .unwrap_or_else(|| fallback_name.to_string()),
         collection: parent.try_into()?,
         variables: variable::try_build_variable_ir(var_defs).map_err(Error::VariableError)?,
     })
