@@ -95,15 +95,10 @@ fn input_def_from_type(
     input_type: &schema::InputObjectType,
 ) -> Result<String> {
     let mut fields = Vec::new();
-    #[cfg(debug_assertions)] // for test stability, we sort here
-    let fields_iter = {
-        let mut sorted = input_type.fields.iter().collect::<Vec<_>>();
-        sorted.sort_unstable_by_key(|item| item.0);
-        sorted.into_iter()
-    };
-    #[cfg(not(debug_assertions))]
-    let fields_iter = input_type.fields.iter();
-    for (name, field) in fields_iter {
+    // For test and file signature stability
+    let mut sorted = input_type.fields.iter().collect::<Vec<_>>();
+    sorted.sort_unstable_by_key(|item| item.0);
+    for (name, field) in sorted.into_iter() {
         let doc = compile_documentation(&field.documentation, 2);
         let field_type = from_input_def_field_def(config, name, &field)?;
         let (_, last_type_mod) = field.type_description.type_modifiers();
@@ -209,15 +204,11 @@ fn global_types_from_names(
         add_sub_input_objects(&mut name_to_type, schema, global_type)?;
         name_to_type.insert(name, global_type);
     }
-    #[cfg(debug_assertions)] // for test stability
-    let names = {
-        let mut sorted_names = name_to_type.iter().collect::<Vec<_>>();
-        sorted_names.sort_unstable_by_key(|value| value.0);
-        sorted_names.into_iter()
-    };
-    #[cfg(not(debug_assertions))]
-    let names = name_to_type.iter();
-    names
+    // For test and file signature stability
+    let mut sorted_names = name_to_type.iter().collect::<Vec<_>>();
+    sorted_names.sort_unstable_by_key(|value| value.0);
+    sorted_names
+        .into_iter()
         .map(|(name, global_type)| {
             let def = match &global_type.definition {
                 schema::TypeDefinition::Enum(enum_type) => {
@@ -310,15 +301,10 @@ fn type_definitions_from_smoosh_complex_ir<'a>(
     smooth_type_name: &str,
 ) -> Result<Vec<Typescript>> {
     let mut modified_complex = complex.clone();
-    #[cfg(debug_assertions)] // for test stability
-    let all_types = {
-        let mut sorted = possibilities.collect::<Vec<_>>();
-        sorted.sort_unstable();
-        sorted
-    };
-    #[cfg(not(debug_assertions))]
-    let all_types = possibilities.collect::<Vec<_>>();
-    modified_complex.name = all_types.join("\" | \"");
+    // For test and file signature stability
+    let mut sorted = possibilities.collect::<Vec<_>>();
+    sorted.sort_unstable();
+    modified_complex.name = sorted.join("\" | \"");
     type_definitions_from_complex_ir(config, global_types, &modified_complex, smooth_type_name)
 }
 
@@ -511,17 +497,12 @@ fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
     if used_globals.is_empty() {
         return String::from("");
     }
-    #[cfg(debug_assertions)] // for test stability
-    let names = {
-        let mut sorted: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
-        sorted.sort_unstable();
-        sorted
-    };
-    #[cfg(not(debug_assertions))]
-    let names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
+    // For test and file signature stability
+    let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
+    sorted_names.sort_unstable();
     format!(
         "import {{ {} }} from \"__generated__/globalTypes\";\n\n",
-        names.join(", ")
+        sorted_names.join(", ")
     )
 }
 

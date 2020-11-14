@@ -250,8 +250,7 @@ impl<'a> UniqueFields<'a> {
 impl<'a> TryFrom<UniqueFields<'a>> for Vec<Field> {
     type Error = Error;
     fn try_from(from: UniqueFields<'a>) -> Result<Self> {
-        let result = from
-            .collection
+        from.collection
             .into_iter()
             .map(|((alias, _name), (field, sub_traversal))| {
                 let concrete = field.type_description.reveal_concrete();
@@ -262,16 +261,12 @@ impl<'a> TryFrom<UniqueFields<'a>> for Vec<Field> {
                     type_ir: get_type_ir_for_field(field, concrete, sub_traversal)?,
                 })
             })
-            .collect::<Result<Self>>();
-        if cfg!(debug_assertions) {
-            // for test stability
-            result.map(|mut field_irs| {
+            .collect::<Result<Self>>()
+            .map(|mut field_irs| {
+                // For test and signature stability
                 field_irs.sort_unstable_by(|a, b| a.prop_name.cmp(&b.prop_name));
                 field_irs
             })
-        } else {
-            result
-        }
     }
 }
 
@@ -367,8 +362,7 @@ impl<'a, 'b> ComplexTraversal<'a> {
 impl<'a> TryFrom<ComplexTraversal<'a>> for ComplexCollection {
     type Error = Error;
     fn try_from(from: ComplexTraversal<'a>) -> Result<Self> {
-        let result = from
-            .concrete_objects
+        from.concrete_objects
             .into_iter()
             .map(|(name, uniques)| {
                 Ok(Complex {
@@ -376,16 +370,12 @@ impl<'a> TryFrom<ComplexTraversal<'a>> for ComplexCollection {
                     fields: uniques.try_into()?,
                 })
             })
-            .collect::<Result<Vec<_>>>();
-        if cfg!(debug_assertions) {
-            // for test stability
-            result.map(|mut possibilities| {
+            .collect::<Result<Vec<_>>>()
+            .map(|mut possibilities| {
+                // For test and signature stability
                 possibilities.sort_unstable_by(|a, b| a.name.cmp(&b.name));
                 ComplexCollection { possibilities }
             })
-        } else {
-            result.map(|possibilities| ComplexCollection { possibilities })
-        }
     }
 }
 
