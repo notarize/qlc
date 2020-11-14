@@ -159,28 +159,28 @@ workflows:
       - cargo_init:
           filters:
             branches:
-              ignore: master
+              ignore: main
 
       - test:
           requires:
             - cargo_init
           filters:
             branches:
-              ignore: master
+              ignore: main
 
       - lint:
           requires:
             - cargo_init
           filters:
             branches:
-              ignore: master
+              ignore: main
 
       - fmt:
           requires:
             - cargo_init
           filters:
             branches:
-              ignore: master
+              ignore: main
 
       - build_release_bin:
           requires:
