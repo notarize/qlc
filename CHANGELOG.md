@@ -1,3 +1,16 @@
+## [0.7.0](https://github.com/notarize/qlc/compare/0.6.1...0.7.0)
+
+### Features
+
+- Always use deterministic output to prevent diffs in file signatures
+  - This is better compatiblity with tsserver for instance
+- Add support for subscriptions
+
+### Bugfixes
+
+- Fix some typos in error messages and make some help text more clear
+- Reduce the aggressiveness of the similarity check for help
+
 ## [0.6.1](https://github.com/notarize/qlc/compare/0.6.0...0.6.1)
 
 ### Bugfixes
