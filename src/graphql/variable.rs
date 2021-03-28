@@ -1,12 +1,15 @@
 use super::ParsedTextType;
 use crate::cli::PrintableMessage;
+use crate::graphql::ir::CompileContext;
 use crate::graphql::schema::field as schema_field;
 use graphql_parser::query as parsed_query;
 use graphql_parser::Pos;
+use std::convert::TryFrom;
 use std::path::Path;
 
 #[derive(Debug)]
 pub enum Error {
+    UnknownCustomeVariableType(String, Pos),
     UnprocessableVariableType(String, Pos),
     ListOfListNotSupported(String, Pos),
 }
@@ -23,22 +26,41 @@ pub enum VariableType<'a> {
     Custom(&'a str),
 }
 
-impl<'a> From<&'a str> for VariableType<'a> {
-    fn from(type_name: &'a str) -> Self {
-        match type_name {
+impl<'a, 'b, 'c> TryFrom<(&'a CompileContext<'a, 'b>, &'c str, Pos)> for VariableType<'c> {
+    type Error = Error;
+    fn try_from(from: (&'a CompileContext<'a, 'b>, &'c str, Pos)) -> Result<Self> {
+        let var = match from.1 {
             "ID" => VariableType::Id,
             "String" => VariableType::String,
             "Float" => VariableType::Float,
             "Int" => VariableType::Int,
             "Boolean" => VariableType::Boolean,
-            x => VariableType::Custom(x),
-        }
+            custom_type_name => match from.0.schema.get_type_for_name(custom_type_name) {
+                None => {
+                    return Err(Error::UnknownCustomeVariableType(
+                        custom_type_name.to_string(),
+                        from.2,
+                    ))
+                }
+                Some(_) => VariableType::Custom(custom_type_name),
+            },
+        };
+        Ok(var)
     }
 }
 
 impl From<(&str, &Path, Error)> for PrintableMessage {
     fn from((contents, file_path, error): (&str, &Path, Error)) -> Self {
         match error {
+            Error::UnknownCustomeVariableType(name, position) => {
+                PrintableMessage::new_compile_error(
+                    &format!("unknown type for variable `{}`", name),
+                    file_path,
+                    contents,
+                    &position,
+                    None,
+                )
+            }
             Error::UnprocessableVariableType(name, position) => {
                 PrintableMessage::new_program_error(
                     &format!("failed to process variable `{}`", name),
@@ -70,7 +92,8 @@ pub struct Variable<'a> {
     pub type_ir: VariableType<'a>,
 }
 
-pub fn try_build_variable_ir<'a>(
+pub fn try_build_variable_ir<'a, 'b, 'c>(
+    context: &'b CompileContext<'b, 'c>,
     defs: &'a [parsed_query::VariableDefinition<'_, ParsedTextType>],
 ) -> Result<Option<Vec<Variable<'a>>>> {
     if defs.is_empty() {
@@ -82,7 +105,7 @@ pub fn try_build_variable_ir<'a>(
             Ok(Variable {
                 prop_name: def.name.clone(),
                 type_modifier,
-                type_ir: graph_name.into(),
+                type_ir: TryFrom::try_from((context, graph_name, def.position))?,
             })
         })
         .collect::<Result<Vec<Variable<'_>>>>()

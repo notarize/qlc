@@ -192,8 +192,8 @@ type OperationResult<'a> =
     std::result::Result<(Operation<'a>, Vec<Warning>), (Vec<Error>, Vec<Warning>)>;
 type ImportedFragments<'a> = HashMap<String, parsed_query::FragmentDefinition<'a, ParsedTextType>>;
 
-struct CompileContext<'a, 'b> {
-    schema: &'a schema::Schema,
+pub struct CompileContext<'a, 'b> {
+    pub schema: &'a schema::Schema,
     imported_fragments: ImportedFragments<'b>,
     warnings: std::cell::RefCell<Vec<Warning>>,
 }
@@ -573,7 +573,8 @@ fn build_from_operation<'a, 'b>(
             .cloned()
             .unwrap_or_else(|| fallback_name.to_string()),
         collection: parent.try_into()?,
-        variables: variable::try_build_variable_ir(var_defs).map_err(Error::VariableError)?,
+        variables: variable::try_build_variable_ir(context, var_defs)
+            .map_err(Error::VariableError)?,
     })
 }
 
