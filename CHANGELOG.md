@@ -1,3 +1,13 @@
+## [0.8.0](https://github.com/notarize/qlc/compare/0.7.0...0.8.0)
+
+### Bugfixes
+
+- Fix compiler error message for unknown variable types.
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.51
+
 ## [0.7.0](https://github.com/notarize/qlc/compare/0.6.1...0.7.0)
 
 ### Features
