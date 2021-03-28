@@ -23,7 +23,7 @@ pub enum Error {
     EnumMissingValues(String),
     InterfaceMissingTypes(String),
     UnionMissingTypes(String),
-    JSONParseError(serde_json::Error),
+    JsonParseError(serde_json::Error),
 }
 
 #[derive(Debug)]
@@ -122,7 +122,7 @@ impl TryFrom<json::Type> for Type {
         } = json;
         let definition = match kind.as_ref() {
             "OBJECT" => {
-                let json_fields = fields.ok_or_else(|| Error::FieldsMissingForType(name))?;
+                let json_fields = fields.ok_or(Error::FieldsMissingForType(name))?;
                 let object_type = ObjectType {
                     fields: get_fields_for_complex(json_fields, true)?,
                 };
@@ -131,7 +131,7 @@ impl TryFrom<json::Type> for Type {
             "ENUM" => {
                 let enum_type = EnumType {
                     possible_values: flattened_complex_description(enum_values)
-                        .ok_or_else(|| Error::EnumMissingValues(name))?,
+                        .ok_or(Error::EnumMissingValues(name))?,
                 };
                 TypeDefinition::Enum(enum_type)
             }
@@ -184,7 +184,7 @@ pub struct Schema {
 
 impl Schema {
     pub fn try_from_reader(reader: impl Read) -> Result<Self, Error> {
-        let schema_json = json::Schema::try_from_reader(reader).map_err(Error::JSONParseError)?;
+        let schema_json = json::Schema::try_from_reader(reader).map_err(Error::JsonParseError)?;
         let mut types = HashMap::with_capacity(schema_json.types.len());
         for type_json in schema_json.types {
             types.insert(type_json.name.clone(), Type::try_from(type_json)?);
@@ -229,7 +229,7 @@ pub fn parse_schema(path: &Path) -> Result<Schema, Vec<PrintableMessage>> {
             Error::UnionMissingTypes(name) => {
                 printable_message_error(&format!("union `{}` has no implementations", name))
             }
-            Error::JSONParseError(serde_error) => {
+            Error::JsonParseError(serde_error) => {
                 printable_message_error(&format!("JSON parse error: {}", serde_error))
             }
         };

@@ -8,7 +8,7 @@ pub enum ScalarType {
     String,
     Float,
     Int,
-    ID,
+    Id,
 }
 
 impl From<&str> for ScalarType {
@@ -18,7 +18,7 @@ impl From<&str> for ScalarType {
             "String" => ScalarType::String,
             "Float" => ScalarType::Float,
             "Int" => ScalarType::Int,
-            "ID" => ScalarType::ID,
+            "ID" => ScalarType::Id,
             _ => ScalarType::Custom(name.to_string()),
         }
     }
@@ -154,16 +154,16 @@ impl TryFrom<json::FieldType> for FieldType {
             let kind = iter.kind.as_ref();
             let name = match kind {
                 "NON_NULL" => {
-                    iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForNonNull)?;
+                    iter = *iter.of_type.ok_or(Error::MissingTypeOfForNonNull)?;
                     modifier_builder.actualize();
                     continue;
                 }
                 "LIST" => {
-                    iter = *iter.of_type.ok_or_else(|| Error::MissingTypeOfForList)?;
+                    iter = *iter.of_type.ok_or(Error::MissingTypeOfForList)?;
                     modifier_builder.listize();
                     continue;
                 }
-                _ => iter.name.ok_or_else(|| Error::MissingNameForField)?,
+                _ => iter.name.ok_or(Error::MissingNameForField)?,
             };
             let definition = match kind {
                 "OBJECT" => FieldTypeDefinition::Object,

@@ -6,6 +6,9 @@ edition = "2018"
 license = "MIT"
 autotests = false
 
+[profile.dev]
+split-debuginfo = "unpacked"
+
 [[test]]
 name = "qlc"
 path = "tests/mod.rs"

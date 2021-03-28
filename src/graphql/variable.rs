@@ -15,7 +15,7 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum VariableType<'a> {
-    ID,
+    Id,
     String,
     Float,
     Int,
@@ -26,7 +26,7 @@ pub enum VariableType<'a> {
 impl<'a> From<&'a str> for VariableType<'a> {
     fn from(type_name: &'a str) -> Self {
         match type_name {
-            "ID" => VariableType::ID,
+            "ID" => VariableType::Id,
             "String" => VariableType::String,
             "Float" => VariableType::Float,
             "Int" => VariableType::Int,

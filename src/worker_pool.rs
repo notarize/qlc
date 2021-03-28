@@ -23,7 +23,7 @@ enum WorkResult {
         global_types_used: HashSet<String>,
         messages: Vec<PrintableMessage>,
     },
-    DirIOError(std::io::Error, PathBuf),
+    DirIoError(std::io::Error, PathBuf),
 }
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ impl ExitInformation for WorkAggregateResult {
 
 #[derive(Debug)]
 enum Work {
-    GraphQL(PathBuf),
+    GraphQl(PathBuf),
     DirEntry(PathBuf),
 }
 
@@ -83,7 +83,7 @@ impl Work {
             if path.is_dir() {
                 more_work.push(Work::DirEntry(path));
             } else if path.is_file() && path.extension().map_or(false, |x| x == "graphql") {
-                more_work.push(Work::GraphQL(path));
+                more_work.push(Work::GraphQl(path));
             }
         }
         Ok(more_work)
@@ -94,8 +94,8 @@ impl Work {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
                 .map(WorkResult::MoreWork)
-                .unwrap_or_else(|io_error| WorkResult::DirIOError(io_error, path.clone())),
-            Work::GraphQL(path) => compile_file(path, config, schema)
+                .unwrap_or_else(|io_error| WorkResult::DirIoError(io_error, path.clone())),
+            Work::GraphQl(path) => compile_file(path, config, schema)
                 .map(|compile_report| WorkResult::CompileResult {
                     global_types_used: compile_report.global_types_used,
                     messages: compile_report.messages,
@@ -138,7 +138,7 @@ impl Worker {
                         self.tx.send(Message::Work(work)).unwrap();
                     }
                 }
-                WorkResult::DirIOError(io_error, path) => {
+                WorkResult::DirIoError(io_error, path) => {
                     let mut aggregate = self.aggregate.lock().unwrap();
                     aggregate.append_message(
                         PrintableMessage::new_compile_error_from_read_io_error(&io_error, &path),

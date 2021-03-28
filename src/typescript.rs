@@ -263,7 +263,7 @@ fn compile_custom_scalar_name(
 fn type_name_from_scalar(config: &CompileConfig, scalar: &schema_field::ScalarType) -> Typescript {
     match scalar {
         schema_field::ScalarType::Boolean => String::from("boolean"),
-        schema_field::ScalarType::String | schema_field::ScalarType::ID => String::from("string"),
+        schema_field::ScalarType::String | schema_field::ScalarType::Id => String::from("string"),
         schema_field::ScalarType::Float | schema_field::ScalarType::Int => String::from("number"),
         schema_field::ScalarType::Custom(name) => compile_custom_scalar_name(config, name),
     }
@@ -447,7 +447,7 @@ fn compile_variables_type_definition(
                 .iter()
                 .map(|var_ir| {
                     let type_name = match &var_ir.type_ir {
-                        variable::VariableType::ID | variable::VariableType::String => {
+                        variable::VariableType::Id | variable::VariableType::String => {
                             "string".to_string()
                         }
                         variable::VariableType::Float | variable::VariableType::Int => {

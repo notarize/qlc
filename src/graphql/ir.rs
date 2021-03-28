@@ -206,11 +206,11 @@ impl From<Error> for Vec<Error> {
 }
 
 /// Alias and field name
-type FieldID<'a> = (&'a str, &'a str);
+type FieldId<'a> = (&'a str, &'a str);
 
 #[derive(Debug, Clone)]
 struct UniqueFields<'a> {
-    collection: HashMap<FieldID<'a>, (&'a schema_field::Field, FieldTraversal<'a>)>,
+    collection: HashMap<FieldId<'a>, (&'a schema_field::Field, FieldTraversal<'a>)>,
 }
 
 impl<'a> UniqueFields<'a> {
