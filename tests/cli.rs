@@ -4,8 +4,18 @@ use crate::helpers::{
 };
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
+use assert_fs::TempDir;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::{contains, is_empty};
+use std::process::Command;
+
+fn qlc_command_with_config_file(config_file_contents: &str) -> (Command, TempDir) {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    let qlcrc = temp_dir.child(".qlcrc.json");
+    qlcrc.write_str(config_file_contents).unwrap();
+    cmd.arg("-c").arg(qlcrc.path());
+    (cmd, temp_dir)
+}
 
 #[test]
 fn compile_without_schema_file() {
@@ -142,4 +152,33 @@ fn compile_with_non_schema_matching_graphql() {
             Some((2, 3)),
         ));
     cmd.assert().failure().stdout(assertion).stderr(is_empty());
+}
+
+#[test]
+fn compile_with_broken_config_file() {
+    let (mut cmd, temp_dir) = qlc_command_with_config_file(r#"{ invalidJSON }"#);
+    let assertion = contains("program error: error in config file").and(contains(".qlcrc.json`"));
+    cmd.assert().failure().stdout(assertion).stderr(is_empty());
+    drop(temp_dir);
+}
+
+#[test]
+fn compile_with_config_file() {
+    let (mut cmd, temp_dir) =
+        qlc_command_with_config_file(r#"{ "schemaFile": "not_schema.json" }"#);
+    let assertion = contains_read_error(
+        &temp_dir,
+        "not_schema.json",
+        "No such file or directory (os error 2)",
+    );
+    cmd.assert().failure().stdout(assertion).stderr(is_empty());
+}
+
+#[test]
+fn compile_with_config_file_and_cli_override() {
+    let (mut cmd, temp_dir) =
+        qlc_command_with_config_file(r#"{ "schemaFile": "not_schema.json" }"#);
+    let schema_json = temp_dir.child("schema.json");
+    cmd.arg("-s").arg(schema_json.path());
+    cmd.assert().success().stdout(is_empty()).stderr(is_empty());
 }

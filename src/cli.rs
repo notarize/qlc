@@ -2,7 +2,10 @@ use crate::graphql::BottomTypeConfig;
 use clap::{crate_authors, crate_version, App, Arg, ArgMatches};
 use colored::{control, Colorize};
 use graphql_parser::Pos;
+use serde::Deserialize;
 use std::fmt;
+use std::fs::File;
+use std::io::{BufReader, Error as IOError};
 use std::path::{Path, PathBuf};
 use strsim::generic_damerau_levenshtein;
 
@@ -151,11 +154,11 @@ impl fmt::Display for PrintableMessage {
 }
 
 impl PrintableMessage {
-    pub fn new_compile_error_from_read_io_error(error: &std::io::Error, path: &Path) -> Self {
+    pub fn new_compile_error_from_read_io_error(error: &IOError, path: &Path) -> Self {
         PrintableMessage::new_compile_error_from_io_error("read", error, path)
     }
 
-    pub fn new_compile_error_from_write_io_error(error: &std::io::Error, path: &Path) -> Self {
+    pub fn new_compile_error_from_write_io_error(error: &IOError, path: &Path) -> Self {
         PrintableMessage::new_compile_error_from_io_error("write", error, path)
     }
 
@@ -289,24 +292,31 @@ impl ExitInformation for Vec<PrintableMessage> {
     }
 }
 
-fn cli_parse<'a>() -> ArgMatches<'a> {
+fn arg_parse<'a>() -> ArgMatches<'a> {
     App::new("QL Compiler")
         .version(crate_version!())
         .author(crate_authors!())
         .about("\nQL Compiler (qlc) compiles type definitions from graphql and introspection JSON.")
         .arg(
             Arg::with_name("root_dir")
-                .value_name("DIR")
-                .default_value(".")
+                .value_name("ROOT_DIR")
                 .help("Directory to recursively compile"),
+        )
+        .arg(
+            Arg::with_name("config_file_path")
+                .takes_value(true)
+                .value_name("FILE_PATH")
+                .short("c")
+                .long("config-file")
+                .help("Path of JSON configuration file"),
         )
         .arg(
             Arg::with_name("schema_path")
                 .takes_value(true)
-                .value_name("FILE")
+                .value_name("FILE_PATH")
                 .short("s")
                 .long("schema-file")
-                .help("Path of schema introspection JSON file (defaults to DIR/schema.json)"),
+                .help("Path of schema introspection JSON file (defaults to <ROOT_DIR>/schema.json)"),
         )
         .arg(
             Arg::with_name("use_custom_scalars")
@@ -319,7 +329,7 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
                 .value_name("PREFIX")
                 .requires("use_custom_scalars")
                 .long("custom-scalar-prefix")
-                .help("Prefix the name of custom scalars to keep them unique"),
+                .help("Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars"),
         )
         .arg(
             Arg::with_name("nthreads")
@@ -337,6 +347,58 @@ fn cli_parse<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
+/// User configured configuration from configuration file, if it exists
+#[derive(Debug, Default, Deserialize)]
+struct ConfigFileMatches {
+    #[serde(rename(deserialize = "schemaFile"))]
+    schema_path: Option<PathBuf>,
+    #[serde(rename(deserialize = "useCustomScalars"))]
+    use_custom_scalars: Option<bool>,
+    #[serde(rename(deserialize = "customScalarPrefix"))]
+    custom_scalar_prefix: Option<String>,
+    #[serde(rename(deserialize = "numThreads"))]
+    nthreads: Option<usize>,
+}
+
+impl ConfigFileMatches {
+    fn from_file_parse(cli_file_path: Option<&str>) -> Result<Self, PrintableMessage> {
+        let config_file_was_cli_provided = cli_file_path.is_some();
+        let config_file_path = &PathBuf::from(cli_file_path.unwrap_or(".qlcrc.json"));
+        match File::open(config_file_path) {
+            Ok(file) => serde_json::from_reader(BufReader::new(file))
+                .map(|mut config: Self| {
+                    config.schema_path = config.schema_path.and_then(|schema_path| {
+                        if schema_path.is_absolute() {
+                            Some(schema_path)
+                        } else {
+                            config_file_path
+                                .parent()
+                                .map(|parent_config_dir| parent_config_dir.join(schema_path))
+                        }
+                    });
+                    config
+                })
+                .map_err(|serde_error| {
+                    PrintableMessage::new_simple_program_error(&format!(
+                        "error in config file `{}`: {}",
+                        config_file_path.display(),
+                        serde_error
+                    ))
+                }),
+            Err(io_error) => {
+                if config_file_was_cli_provided || io_error.kind() != std::io::ErrorKind::NotFound {
+                    Err(PrintableMessage::new_compile_error_from_read_io_error(
+                        &io_error,
+                        config_file_path,
+                    ))
+                } else {
+                    Ok(ConfigFileMatches::default())
+                }
+            }
+        }
+    }
+}
+
 /// User configured runtime configuration
 #[derive(Debug)]
 pub struct RuntimeConfig {
@@ -349,31 +411,52 @@ pub struct RuntimeConfig {
 
 impl RuntimeConfig {
     pub fn from_cli() -> Self {
-        let matches = cli_parse();
-        if matches.is_present("no_color") {
+        let arg_matches = arg_parse();
+
+        if arg_matches.is_present("no_color") {
             control::set_override(false);
         }
-        let root_dir = PathBuf::from(matches.value_of("root_dir").unwrap());
-        let use_custom_scalars = matches.is_present("use_custom_scalars");
-        let schema_path = matches
+
+        let ConfigFileMatches {
+            schema_path: config_schema_path,
+            use_custom_scalars: config_use_custom_scalars,
+            custom_scalar_prefix: config_custom_scalar_prefix,
+            nthreads: config_nthreads,
+        } = match ConfigFileMatches::from_file_parse(arg_matches.value_of("config_file_path")) {
+            Ok(matches) => matches,
+            Err(config_error_message) => {
+                print_exit_info(vec![config_error_message]);
+            }
+        };
+
+        let root_dir = PathBuf::from(arg_matches.value_of("root_dir").unwrap_or("."));
+        let schema_path = arg_matches
             .value_of("schema_path")
             .map(PathBuf::from)
+            .or(config_schema_path)
             .unwrap_or_else(|| {
                 let mut path = root_dir.clone();
                 path.push("schema.json");
                 path
             });
+        let use_custom_scalars = arg_matches.is_present("use_custom_scalars")
+            || config_use_custom_scalars.unwrap_or(false);
+        let custom_scalar_prefix = arg_matches
+            .value_of("custom_scalar_prefix")
+            .map(|s| s.to_string())
+            .or_else(|| config_use_custom_scalars.and(config_custom_scalar_prefix));
+        let number_threads = arg_matches
+            .value_of("nthreads")
+            .and_then(|st| st.parse().ok())
+            .or(config_nthreads)
+            .unwrap_or_else(|| std::cmp::min(num_cpus::get(), 8));
+
         RuntimeConfig {
             root_dir,
             schema_path,
             use_custom_scalars,
-            custom_scalar_prefix: matches
-                .value_of("custom_scalar_prefix")
-                .map(|s| s.to_string()),
-            number_threads: matches
-                .value_of("nthreads")
-                .and_then(|st| st.parse().ok())
-                .unwrap_or_else(|| std::cmp::min(num_cpus::get(), 8)),
+            custom_scalar_prefix,
+            number_threads,
         }
     }
 
@@ -419,7 +502,7 @@ pub fn similar_help_suggestions(
 }
 
 /// Prints the result of the program to the screen with process exiting.
-pub fn print_exit_info(exit_info: impl ExitInformation) {
+pub fn print_exit_info(exit_info: impl ExitInformation) -> ! {
     let mut warning_count = 0;
     let mut error_count = 0;
     for msg in exit_info.messages() {
@@ -454,7 +537,7 @@ pub fn print_exit_info(exit_info: impl ExitInformation) {
             ))
         );
     }
-    if has_errors {
-        std::process::exit(1);
-    }
+
+    let code = if has_errors { 1 } else { 0 };
+    std::process::exit(code);
 }

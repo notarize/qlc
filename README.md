@@ -84,6 +84,12 @@ $ yarn run qlc -s my_schema.json src
 $ yarn run qlc --help
 ```
 
+Many of the options can also be configured through a camelcased JSON file (by default `.qlcrc.json`). For example:
+
+```json
+{ "useCustomScalars": true, "numThreads": 2 }
+```
+
 ### Benchmarking
 
 How much faster is "faster"? All results below are collected on MacOS, a 2.8 GHz quad-core machine with
