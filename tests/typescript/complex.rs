@@ -1,4 +1,4 @@
-use crate::helpers::{assert_generated, qlc_command_with_fake_dir_and_schema, similar};
+use crate::helpers::{assert_generated, diff, qlc_command_with_fake_dir_and_schema};
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 
@@ -274,7 +274,7 @@ export enum UserRole {
         .child("user")
         .child("__generated__")
         .child("absoluteUserFragmentOne.ts");
-    frag_one.assert(similar(
+    frag_one.assert(diff(
         r#"
 export type absoluteUserFragmentOne = {
   as: "User";
@@ -287,7 +287,7 @@ export type absoluteUserFragmentOne = {
         .child("user")
         .child("__generated__")
         .child("absoluteUserFragmentTwo.ts");
-    frag_two.assert(similar(
+    frag_two.assert(diff(
         r#"
 export type absoluteUserFragmentTwo_customerProfile = {
   id: string;

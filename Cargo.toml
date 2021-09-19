@@ -25,5 +25,5 @@ num_cpus = "1"
 
 [dev-dependencies]
 assert_cmd = "1"
-predicates = "1"
+predicates = "2"
 assert_fs = "1"

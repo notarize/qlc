@@ -59,14 +59,14 @@ pub fn qlc_command_with_fake_dir_and_schema() -> (Command, TempDir) {
     (cmd, temp_dir)
 }
 
-/// Similar predicate that ignores whitespace before and after the desired string
-pub fn similar(orig: &'static str) -> predicates::str::DifferencePredicate {
-    predicates::str::similar(format!("/* tslint:disable */\n/* eslint-disable */\n// This file was automatically generated and should not be edited.\n\n{}", orig.trim()))
+/// Diff predicate that ignores whitespace before and after the desired string
+pub fn diff(orig: &'static str) -> predicates::str::DifferencePredicate {
+    predicates::str::diff(format!("/* tslint:disable */\n/* eslint-disable */\n// This file was automatically generated and should not be edited.\n\n{}", orig.trim()))
 }
 
 pub fn assert_generated(dir: &TempDir, expected_file_name: &str, expected_content: &'static str) {
     let output = dir.child("__generated__").child(expected_file_name);
-    output.assert(similar(expected_content));
+    output.assert(diff(expected_content));
 }
 
 /// The basic outline of a succesful compile:
