@@ -77,7 +77,7 @@ fn from_input_def_field_def(
 ) -> Result<String> {
     let concrete = &field.type_description.reveal_concrete();
     let output = match &concrete.definition {
-        schema_field::FieldTypeDefinition::Scalar(sc_type) => compile_scalar(config, &sc_type),
+        schema_field::FieldTypeDefinition::Scalar(sc_type) => compile_scalar(config, sc_type),
         schema_field::FieldTypeDefinition::Enum => concrete.name.to_string(),
         schema_field::FieldTypeDefinition::InputObject => concrete.name.to_string(),
         _ => {
@@ -100,7 +100,7 @@ fn input_def_from_type(
     sorted.sort_unstable_by_key(|item| item.0);
     for (name, field) in sorted.into_iter() {
         let doc = compile_documentation(&field.documentation, 2);
-        let field_type = from_input_def_field_def(config, name, &field)?;
+        let field_type = from_input_def_field_def(config, name, field)?;
         let (_, last_type_mod) = field.type_description.type_modifiers();
         let ts_field = match last_type_mod {
             schema_field::FieldTypeModifier::None => format!("  {}{}: {};", doc, name, field_type),
@@ -254,9 +254,9 @@ fn compile_custom_scalar_name(
     string_thing: impl std::string::ToString,
 ) -> Typescript {
     match &config.bottom_type_config {
-        BottomTypeConfig::UseBottomType => String::from("any"),
-        BottomTypeConfig::UseRealName => string_thing.to_string(),
-        BottomTypeConfig::UseRealNameWithPrefix(s) => format!("{}{}", s, string_thing.to_string()),
+        BottomTypeConfig::DefaultBottomType => String::from("any"),
+        BottomTypeConfig::RealName => string_thing.to_string(),
+        BottomTypeConfig::RealNameWithPrefix(s) => format!("{}{}", s, string_thing.to_string()),
     }
 }
 
@@ -349,7 +349,7 @@ fn type_definitions_from_complex_field_collection(
         return type_definitions_from_smoosh_complex_ir(
             config,
             global_types,
-            &first_possiblity,
+            first_possiblity,
             repeated_possiblities.into_iter(),
             main_type,
         );
@@ -378,7 +378,7 @@ fn type_definitions_from_complex_field_collection(
         definitions.append(&mut type_definitions_from_smoosh_complex_ir(
             config,
             global_types,
-            &common_representative,
+            common_representative,
             repeated_possiblities.into_iter(),
             &smoosh_type_name,
         )?);
@@ -407,7 +407,7 @@ fn type_definitions_from_complex_ir<'a>(
                 definitions.extend(type_definitions_from_complex_field_collection(
                     config,
                     global_types,
-                    &complex_collection,
+                    complex_collection,
                     &sub_prop_path,
                 )?);
                 sub_prop_path
@@ -416,7 +416,7 @@ fn type_definitions_from_complex_ir<'a>(
                 global_types.insert(name.clone());
                 name.clone()
             }
-            ir::FieldType::Scalar(scalar_type) => type_name_from_scalar(config, &scalar_type),
+            ir::FieldType::Scalar(scalar_type) => type_name_from_scalar(config, scalar_type),
             ir::FieldType::TypeName => format!("\"{}\"", complex_ir.name),
         };
         let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);

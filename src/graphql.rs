@@ -23,9 +23,9 @@ pub struct CompileReport {
 
 #[derive(Debug)]
 pub enum BottomTypeConfig {
-    UseBottomType,
-    UseRealName,
-    UseRealNameWithPrefix(String),
+    DefaultBottomType,
+    RealName,
+    RealNameWithPrefix(String),
 }
 
 #[derive(Debug)]
@@ -166,7 +166,7 @@ fn parse_foreign_fragments<'a>(
 ) -> HashMap<String, FragmentDefinition<'a, ParsedTextType>> {
     let mut parsed_imported_fragments = HashMap::new();
     for (other_path, (contents, location)) in imported_contents.iter() {
-        if let Ok(mut parsed) = parse_graphql_file(&contents, &other_path) {
+        if let Ok(mut parsed) = parse_graphql_file(contents, other_path) {
             // We already know there is exactly one definition since read_graphql_file
             // throws away documents that contain more or less than one defintion.
             for def in parsed.definitions.drain(0..1) {
@@ -204,13 +204,13 @@ pub fn compile_file(
     let mut imported_contents = HashMap::new();
     add_imported_fragments(
         &config.root_dir,
-        &path,
+        path,
         &contents,
         &mut imported_contents,
         &mut messages,
     );
     let parsed_imported_fragments =
-        parse_foreign_fragments(&path, &imported_contents, &mut messages);
+        parse_foreign_fragments(path, &imported_contents, &mut messages);
 
     let (op_ir, warnings) =
         match ir::Operation::compile(&parsed.definitions[0], schema, parsed_imported_fragments) {

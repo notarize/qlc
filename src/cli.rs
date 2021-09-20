@@ -387,9 +387,9 @@ impl RuntimeConfig {
 
     pub fn bottom_type_config(&self) -> BottomTypeConfig {
         match (self.use_custom_scalars, &self.custom_scalar_prefix) {
-            (false, _) => BottomTypeConfig::UseBottomType,
-            (true, None) => BottomTypeConfig::UseRealName,
-            (true, Some(s)) => BottomTypeConfig::UseRealNameWithPrefix(s.clone()),
+            (false, _) => BottomTypeConfig::DefaultBottomType,
+            (true, None) => BottomTypeConfig::RealName,
+            (true, Some(s)) => BottomTypeConfig::RealNameWithPrefix(s.clone()),
         }
     }
 

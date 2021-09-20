@@ -87,7 +87,7 @@ pub enum Error {
         position: Pos,
         possible_field_names: Vec<String>,
     },
-    VariableError(variable::Error),
+    Variable(variable::Error),
     MissingType(String),
     UnexpectedComplexTravseral(String),
     InputObjectOnSelection {
@@ -161,7 +161,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                     Some(&format!("Check the fields of `{}`.{}", parent_type_name, extra)),
                 )
             }
-            Error::VariableError(var_error) => {
+            Error::Variable(var_error) => {
                 PrintableMessage::from((contents, file_path, var_error))
             }
             Error::MissingType(type_name) => PrintableMessage::new_simple_program_error(
@@ -573,8 +573,7 @@ fn build_from_operation<'a, 'b>(
             .cloned()
             .unwrap_or_else(|| fallback_name.to_string()),
         collection: parent.try_into()?,
-        variables: variable::try_build_variable_ir(context, var_defs)
-            .map_err(Error::VariableError)?,
+        variables: variable::try_build_variable_ir(context, var_defs).map_err(Error::Variable)?,
     })
 }
 
@@ -667,7 +666,7 @@ fn collect_fields_from_selection_set<'a, 'b>(
         {
             parsed_query::Selection::Field(selection_field) => {
                 if let Err(sub_messages) =
-                    insert_field(context, &selection_field, complex_parent, jump_state)
+                    insert_field(context, selection_field, complex_parent, jump_state)
                 {
                     errors.extend(sub_messages);
                 }

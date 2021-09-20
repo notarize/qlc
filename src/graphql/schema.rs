@@ -23,7 +23,7 @@ pub enum Error {
     EnumMissingValues(String),
     InterfaceMissingTypes(String),
     UnionMissingTypes(String),
-    JsonParseError(serde_json::Error),
+    JsonParse(serde_json::Error),
 }
 
 #[derive(Debug)]
@@ -184,7 +184,7 @@ pub struct Schema {
 
 impl Schema {
     pub fn try_from_reader(reader: impl Read) -> Result<Self, Error> {
-        let schema_json = json::Schema::try_from_reader(reader).map_err(Error::JsonParseError)?;
+        let schema_json = json::Schema::try_from_reader(reader).map_err(Error::JsonParse)?;
         let mut types = HashMap::with_capacity(schema_json.types.len());
         for type_json in schema_json.types {
             types.insert(type_json.name.clone(), Type::try_from(type_json)?);
@@ -229,7 +229,7 @@ pub fn parse_schema(path: &Path) -> Result<Schema, Vec<PrintableMessage>> {
             Error::UnionMissingTypes(name) => {
                 printable_message_error(&format!("union `{}` has no implementations", name))
             }
-            Error::JsonParseError(serde_error) => {
+            Error::JsonParse(serde_error) => {
                 printable_message_error(&format!("JSON parse error: {}", serde_error))
             }
         };
