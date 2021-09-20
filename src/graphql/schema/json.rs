@@ -16,6 +16,8 @@ pub struct Field {
     pub description: Option<String>,
     #[serde(rename(deserialize = "type"))]
     pub type_information: FieldType,
+    #[serde(rename(deserialize = "isDeprecated"))]
+    pub deprecated: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]

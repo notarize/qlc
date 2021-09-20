@@ -332,6 +332,11 @@ fn arg_parse<'a>() -> ArgMatches<'a> {
                 .help("Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars"),
         )
         .arg(
+            Arg::with_name("show_deprecation_warnings")
+                .long("show-deprecation-warnings")
+                .help("Enable warnings for deprecated field usage"),
+        )
+        .arg(
             Arg::with_name("nthreads")
                 .long("num-threads")
                 .value_name("NUMBER")
@@ -358,6 +363,8 @@ struct ConfigFileMatches {
     custom_scalar_prefix: Option<String>,
     #[serde(rename(deserialize = "numThreads"))]
     nthreads: Option<usize>,
+    #[serde(rename(deserialize = "showDeprecationWarnings"))]
+    show_deprecation_warnings: Option<bool>,
 }
 
 impl ConfigFileMatches {
@@ -404,6 +411,7 @@ impl ConfigFileMatches {
 pub struct RuntimeConfig {
     root_dir: PathBuf,
     schema_path: PathBuf,
+    show_deprecation_warnings: bool,
     use_custom_scalars: bool,
     custom_scalar_prefix: Option<String>,
     number_threads: usize,
@@ -422,6 +430,7 @@ impl RuntimeConfig {
             use_custom_scalars: config_use_custom_scalars,
             custom_scalar_prefix: config_custom_scalar_prefix,
             nthreads: config_nthreads,
+            show_deprecation_warnings: config_show_deprecation_warnings,
         } = match ConfigFileMatches::from_file_parse(arg_matches.value_of("config_file_path")) {
             Ok(matches) => matches,
             Err(config_error_message) => {
@@ -439,6 +448,8 @@ impl RuntimeConfig {
                 path.push("schema.json");
                 path
             });
+        let show_deprecation_warnings = arg_matches.is_present("show_deprecation_warnings")
+            || config_show_deprecation_warnings.unwrap_or(false);
         let use_custom_scalars = arg_matches.is_present("use_custom_scalars")
             || config_use_custom_scalars.unwrap_or(false);
         let custom_scalar_prefix = arg_matches
@@ -454,6 +465,7 @@ impl RuntimeConfig {
         RuntimeConfig {
             root_dir,
             schema_path,
+            show_deprecation_warnings,
             use_custom_scalars,
             custom_scalar_prefix,
             number_threads,
@@ -474,6 +486,10 @@ impl RuntimeConfig {
             (true, None) => BottomTypeConfig::RealName,
             (true, Some(s)) => BottomTypeConfig::RealNameWithPrefix(s.clone()),
         }
+    }
+
+    pub fn show_deprecation_warnings(&self) -> bool {
+        self.show_deprecation_warnings
     }
 
     pub fn thread_count(&self) -> usize {

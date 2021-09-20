@@ -17,6 +17,11 @@ pub enum Warning {
         possible_types: Vec<String>,
         spread_type_name: String,
     },
+    DeprecatedFieldUse {
+        position: Pos,
+        field_name: String,
+        parent_type_name: String,
+    },
 }
 
 impl From<(&str, &Path, Warning)> for PrintableMessage {
@@ -36,6 +41,13 @@ impl From<(&str, &Path, Warning)> for PrintableMessage {
                     possible_types.join("`, `"),
                     spread_type_name,
                 )),
+            ),
+            Warning::DeprecatedFieldUse { position, field_name, parent_type_name } => PrintableMessage::new_compile_warning(
+                &format!("use of deprecated field `{}` on type `{}`", field_name, parent_type_name),
+                file_path,
+                contents,
+                &position,
+                None
             ),
         }
     }
@@ -194,8 +206,15 @@ type ImportedFragments<'a> = HashMap<String, parsed_query::FragmentDefinition<'a
 
 pub struct CompileContext<'a, 'b> {
     pub schema: &'a schema::Schema,
+    show_deprecation_warnings: bool,
     imported_fragments: ImportedFragments<'b>,
     warnings: std::cell::RefCell<Vec<Warning>>,
+}
+
+impl<'a, 'b> CompileContext<'a, 'b> {
+    fn push_warning(&self, warning: Warning) {
+        self.warnings.borrow_mut().push(warning);
+    }
 }
 
 // For a few conversions with ?
@@ -300,18 +319,15 @@ impl<'a, 'b> ComplexTraversal<'a> {
             base.concrete_objects
                 .retain(|type_name, _| self.concrete_objects.contains_key(type_name));
             if !jump_state.is_fully_jumped() && base.concrete_objects.is_empty() {
-                context
-                    .warnings
-                    .borrow_mut()
-                    .push(Warning::OverFragmentNarrowing {
-                        position,
-                        possible_types: self
-                            .concrete_objects
-                            .keys()
-                            .map(|key| key.to_string())
-                            .collect(),
-                        spread_type_name: spread_type_name.to_string(),
-                    });
+                context.push_warning(Warning::OverFragmentNarrowing {
+                    position,
+                    possible_types: self
+                        .concrete_objects
+                        .keys()
+                        .map(|key| key.to_string())
+                        .collect(),
+                    spread_type_name: spread_type_name.to_string(),
+                });
             }
             base
         })
@@ -480,9 +496,11 @@ impl<'a, 'b> Operation<'a> {
         definition: &'a parsed_query::Definition<'a, ParsedTextType>,
         schema: &'b schema::Schema,
         imported_fragments: ImportedFragments<'a>,
+        show_deprecation_warnings: bool,
     ) -> OperationResult<'a> {
         let context = CompileContext {
             schema,
+            show_deprecation_warnings,
             imported_fragments,
             warnings: std::cell::RefCell::new(Vec::new()),
         };
@@ -614,7 +632,7 @@ fn insert_field<'a, 'b>(
 ) -> ResultMany<()> {
     let name = &selection_field.name;
     let alias = selection_field.alias.as_ref().unwrap_or(name);
-    let field = &traversal.fields_lookup.get(name).ok_or_else(|| {
+    let field = traversal.fields_lookup.get(name).ok_or_else(|| {
         vec![Error::UnknownField {
             parent_type_name: traversal.type_name.to_string(),
             field_name: name.to_string(),
@@ -626,18 +644,21 @@ fn insert_field<'a, 'b>(
     let is_complex = field.type_description.is_complex();
     let field_type_name = &field.type_description.reveal_concrete().name[..];
     match (has_no_sub_selections, is_complex) {
-        (true, true) => Err(vec![Error::MissingSelectionSetOnType(
-            field_type_name.to_string(),
-            selection_field.position,
-        )]),
-        (false, false) => Err(vec![Error::SelectionSetOnWrongType(
-            field_type_name.to_string(),
-            selection_field.position,
-        )]),
+        (true, true) => {
+            return Err(vec![Error::MissingSelectionSetOnType(
+                field_type_name.to_string(),
+                selection_field.position,
+            )])
+        }
+        (false, false) => {
+            return Err(vec![Error::SelectionSetOnWrongType(
+                field_type_name.to_string(),
+                selection_field.position,
+            )])
+        }
         (true, false) => {
             let terminal = TerminalTraversal::from(field_type_name);
             traversal.insert_terminal(alias, field_type_name, field, terminal)?;
-            Ok(())
         }
         (false, true) => {
             let mut sub_parent =
@@ -649,9 +670,18 @@ fn insert_field<'a, 'b>(
                 jump_state,
             )?;
             traversal.insert_complex(alias, field_type_name, field, sub_parent)?;
-            Ok(())
         }
+    };
+
+    if context.show_deprecation_warnings && field.deprecated && jump_state.is_local() {
+        context.push_warning(Warning::DeprecatedFieldUse {
+            position: selection_field.position,
+            field_name: field.name.to_string(),
+            parent_type_name: traversal.type_name.to_string(),
+        });
     }
+
+    Ok(())
 }
 
 fn collect_fields_from_selection_set<'a, 'b>(

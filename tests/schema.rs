@@ -1,4 +1,6 @@
-use super::helpers::{contains_read_error, qlc_command_with_fake_dir};
+use super::helpers::{
+    contains_read_error, qlc_command_with_fake_dir, qlc_command_with_fake_dir_and_schema,
+};
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use predicates::str::{contains, is_empty};
@@ -58,4 +60,29 @@ fn schema_file_invalid_schema_json() {
         ))
         .stderr(is_empty())
         .failure();
+}
+
+#[test]
+fn use_of_deprecated_fields() {
+    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
+    temp_dir
+        .child("deprecated.graphql")
+        .write_str(
+            r#"
+query Deprecated($id: ID!) {
+  node(id: $id) {
+    ... on Organization {
+      features
+    }
+  }
+}"#,
+        )
+        .unwrap();
+    cmd.arg("--show-deprecation-warnings")
+        .assert()
+        .stdout(contains(
+            "warning: use of deprecated field `features` on type `Organization`",
+        ))
+        .stderr(is_empty())
+        .success();
 }

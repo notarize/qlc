@@ -201,6 +201,7 @@ pub struct Field {
     pub name: String,
     pub documentation: Documentation,
     pub type_description: FieldType,
+    pub deprecated: bool,
 }
 
 impl Field {
@@ -209,6 +210,7 @@ impl Field {
             name: "__typename".to_string(),
             documentation: None,
             type_description: FieldType::new_type_name(),
+            deprecated: false,
         }
     }
 }
@@ -220,6 +222,7 @@ impl TryFrom<json::Field> for Field {
             type_information,
             name,
             description,
+            deprecated,
         } = json;
         Ok(Field {
             name,
@@ -230,6 +233,7 @@ impl TryFrom<json::Field> for Field {
                     .collect::<Vec<_>>()
                     .join("\n")
             }),
+            deprecated: deprecated.unwrap_or(false),
             type_description: type_information.try_into()?,
         })
     }

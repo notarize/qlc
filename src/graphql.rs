@@ -31,6 +31,7 @@ pub enum BottomTypeConfig {
 #[derive(Debug)]
 pub struct CompileConfig {
     root_dir: PathBuf,
+    show_deprecation_warnings: bool,
     pub bottom_type_config: BottomTypeConfig,
 }
 
@@ -39,6 +40,7 @@ impl From<&RuntimeConfig> for CompileConfig {
         CompileConfig {
             root_dir: from.root_dir_path(),
             bottom_type_config: from.bottom_type_config(),
+            show_deprecation_warnings: from.show_deprecation_warnings(),
         }
     }
 }
@@ -212,21 +214,25 @@ pub fn compile_file(
     let parsed_imported_fragments =
         parse_foreign_fragments(path, &imported_contents, &mut messages);
 
-    let (op_ir, warnings) =
-        match ir::Operation::compile(&parsed.definitions[0], schema, parsed_imported_fragments) {
-            Ok(ir) => ir,
-            Err((ir_errors, warnings)) => {
-                messages.extend(
-                    ir_errors
-                        .into_iter()
-                        .map(|ir_error| PrintableMessage::from((contents.as_ref(), path, ir_error)))
-                        .chain(warnings.into_iter().map(|ir_warning| {
-                            PrintableMessage::from((contents.as_ref(), path, ir_warning))
-                        })),
-                );
-                return Err(messages);
-            }
-        };
+    let (op_ir, warnings) = match ir::Operation::compile(
+        &parsed.definitions[0],
+        schema,
+        parsed_imported_fragments,
+        config.show_deprecation_warnings,
+    ) {
+        Ok(ir) => ir,
+        Err((ir_errors, warnings)) => {
+            messages.extend(
+                ir_errors
+                    .into_iter()
+                    .map(|ir_error| PrintableMessage::from((contents.as_ref(), path, ir_error)))
+                    .chain(warnings.into_iter().map(|ir_warning| {
+                        PrintableMessage::from((contents.as_ref(), path, ir_warning))
+                    })),
+            );
+            return Err(messages);
+        }
+    };
 
     messages.extend(
         warnings
