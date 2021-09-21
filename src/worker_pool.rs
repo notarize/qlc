@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -50,6 +50,15 @@ impl WorkAggregateResult {
 
     fn append_message(&mut self, message: PrintableMessage) {
         self.messages.push(message);
+    }
+
+    fn extend_from(&mut self, aggregate: Self) {
+        let Self {
+            messages,
+            global_types,
+        } = aggregate;
+        self.extend_messages(messages);
+        self.extend_globals(global_types);
     }
 }
 
@@ -113,7 +122,7 @@ struct Worker {
     schema: Arc<Schema>,
     is_waiting: bool,
     is_quitting: bool,
-    aggregate: Arc<Mutex<WorkAggregateResult>>,
+    aggregate: WorkAggregateResult,
     num_waiting: Arc<AtomicUsize>,
     num_quitting: Arc<AtomicUsize>,
     thread_count: usize,
@@ -122,16 +131,15 @@ struct Worker {
 }
 
 impl Worker {
-    fn run(mut self) {
+    fn run(mut self) -> WorkAggregateResult {
         while let Some(work) = self.pop_work() {
             match work.run(&self.compile_config, &self.schema) {
                 WorkResult::CompileResult {
                     global_types_used,
                     messages,
                 } => {
-                    let mut aggregate = self.aggregate.lock().unwrap();
-                    aggregate.extend_globals(global_types_used);
-                    aggregate.extend_messages(messages);
+                    self.aggregate.extend_globals(global_types_used);
+                    self.aggregate.extend_messages(messages);
                 }
                 WorkResult::MoreWork(additional_work) => {
                     for work in additional_work {
@@ -139,13 +147,13 @@ impl Worker {
                     }
                 }
                 WorkResult::DirIoError(io_error, path) => {
-                    let mut aggregate = self.aggregate.lock().unwrap();
-                    aggregate.append_message(
+                    self.aggregate.append_message(
                         PrintableMessage::new_compile_error_from_read_io_error(&io_error, &path),
                     );
                 }
             }
         }
+        self.aggregate
     }
 
     fn pop_work(&mut self) -> Option<Work> {
@@ -239,7 +247,6 @@ impl WorkerPool {
     }
 
     pub fn work(&self) -> impl ExitInformation {
-        let aggregate = Arc::new(Mutex::new(WorkAggregateResult::new()));
         let (tx, rx) = channel::unbounded();
         let num_waiting = Arc::new(AtomicUsize::new(0));
         let num_quitting = Arc::new(AtomicUsize::new(0));
@@ -252,7 +259,7 @@ impl WorkerPool {
                 schema: self.schema.clone(),
                 num_quitting: num_quitting.clone(),
                 num_waiting: num_waiting.clone(),
-                aggregate: aggregate.clone(),
+                aggregate: WorkAggregateResult::new(),
                 is_quitting: false,
                 is_waiting: false,
                 tx: tx.clone(),
@@ -265,30 +272,22 @@ impl WorkerPool {
         }
         drop(tx);
         drop(rx);
+
+        let mut aggregate = WorkAggregateResult::new();
         for handle in handles {
-            handle.join().unwrap();
+            let sub_aggregate = handle.join().unwrap();
+            aggregate.extend_from(sub_aggregate);
         }
 
-        let mut unlocked_work_aggregate = match Arc::try_unwrap(aggregate) {
-            Ok(agg_mutex) => match agg_mutex.into_inner() {
-                Ok(u) => u,
-                Err(_) => WorkAggregateResult::from(PrintableMessage::new_simple_program_error(
-                    "failed to unlock mutex in finality",
-                )),
-            },
-            Err(_) => WorkAggregateResult::from(PrintableMessage::new_simple_program_error(
-                "failed to unwrap arc in finality",
-            )),
-        };
         if let Err(global_type_error) = compile_global_types_file(
             &self.root_dir_path,
             &self.compile_config,
             &self.schema,
-            &unlocked_work_aggregate.global_types,
+            &aggregate.global_types,
         ) {
-            unlocked_work_aggregate.append_message(global_type_error);
+            aggregate.append_message(global_type_error);
         }
 
-        unlocked_work_aggregate
+        aggregate
     }
 }
