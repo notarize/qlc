@@ -1,3 +1,19 @@
+## [0.9.0](https://github.com/notarize/qlc/compare/0.8.0...0.9.0)
+
+### Features
+
+- Add support for a `.qlcrc.json` config file, allowing most CLI args to be passed in
+  camel-case JSON form (CLI args always have precedence) #19
+- Add option `--show-deprecation-warnings` to have QLC print warning about usage of fields
+  that are deprecated in the schema #22
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.55
+- Remove usage of `Mutex`/`Arc` for worker aggregates for less contention (performance in
+  some cases) and a large drop in the number of `.unwrap()` calls
+- Upgrade github release client used during CI (0.12.2 -> 0.14.0)
+
 ## [0.8.0](https://github.com/notarize/qlc/compare/0.7.0...0.8.0)
 
 ### Bugfixes
