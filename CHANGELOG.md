@@ -1,3 +1,11 @@
+# Changelog
+
+## [0.10.0](https://github.com/notarize/qlc/compare/0.9.0...0.10.0)
+
+### Features
+
+- Add prebuilt binaries and npm package support for aarch64 darwin.
+
 ## [0.9.0](https://github.com/notarize/qlc/compare/0.8.0...0.9.0)
 
 ### Features
