@@ -50,10 +50,10 @@ export type CommentQueryVariables = {
 
 ### Usage
 
-You can download the latest binaries (currently available for Linux and MacOS) on the
-[releases](https://github.com/notarize/qlc/releases) page.
+You can download _some_ prebuilt binaries on the
+[releases](https://github.com/notarize/qlc/releases) page. You will need to build from source with `cargo` for other platforms.
 
-For convenience, it is also available as an NPM package:
+For convenience, it is also available as an NPM package that supports x64/aarch64 MacOS and x64 linux:
 
 ```sh
 $ yarn add @notarize/qlc-cli

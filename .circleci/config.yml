@@ -17,7 +17,7 @@ executors:
 
   cross_compiling_host:
     docker:
-      - image: notarize/cross-rust:1.55.0-buster
+      - image: notarize/cross-rust:1.55.0-buster-2
     working_directory: /root/notarize/qlc
     environment:
       CARGO_HOME: /root/notarize/qlc/.cargo
@@ -92,19 +92,27 @@ jobs:
     steps:
       - attach_made_workspace
       - run:
-          name: Building OS X
+          name: Building x86_64 OS X
           command: cargo build --release --target=x86_64-apple-darwin
           environment:
             CC: o64-clang
             CXX: o64-clang++
             LIBZ_SYS_STATIC: 1
       - run:
-          name: Building Linux Musl
+          name: Building aarch64 OS X
+          command: cargo build --release --target=aarch64-apple-darwin
+          environment:
+            CC: o64-clang
+            CXX: o64-clang++
+            LIBZ_SYS_STATIC: 1
+      - run:
+          name: Building x86_64 Linux Musl
           command: cargo build --release --target=x86_64-unknown-linux-musl
       - persist_to_workspace:
           root: /root/notarize
           paths:
             - qlc/target/x86_64-apple-darwin/release
+            - qlc/target/aarch64-apple-darwin/release
             - qlc/target/x86_64-unknown-linux-musl/release
 
   create_github_release:
@@ -116,16 +124,21 @@ jobs:
           command: |
             mkdir -p archives
 
-            LINUX_MUSL="x86_64-unknown-linux-musl"
-            cd "$CIRCLE_WORKING_DIRECTORY/target/$LINUX_MUSL/release"
+            X86_LINUX_MUSL="x86_64-unknown-linux-musl"
+            cd "$CIRCLE_WORKING_DIRECTORY/target/$X86_LINUX_MUSL/release"
             VERSION=$(./qlc --version | sed 's/QL Compiler //g')
-            tar czf "qlc-$VERSION-$LINUX_MUSL.tar.gz" qlc
-            mv "qlc-$VERSION-$LINUX_MUSL.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
+            tar czf "qlc-$VERSION-$X86_LINUX_MUSL.tar.gz" qlc
+            mv "qlc-$VERSION-$X86_LINUX_MUSL.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
 
-            MAC_OSX="x86_64-apple-darwin"
-            cd "$CIRCLE_WORKING_DIRECTORY/target/$MAC_OSX/release"
-            tar czf "qlc-$VERSION-$MAC_OSX.tar.gz" qlc
-            mv "qlc-$VERSION-$MAC_OSX.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
+            X86_MAC_OSX="x86_64-apple-darwin"
+            cd "$CIRCLE_WORKING_DIRECTORY/target/$X86_MAC_OSX/release"
+            tar czf "qlc-$VERSION-$X86_MAC_OSX.tar.gz" qlc
+            mv "qlc-$VERSION-$X86_MAC_OSX.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
+
+            AARCH64_MAC_OSX="aarch64-apple-darwin"
+            cd "$CIRCLE_WORKING_DIRECTORY/target/$AARCH64_MAC_OSX/release"
+            tar czf "qlc-$VERSION-$AARCH64_MAC_OSX.tar.gz" qlc
+            mv "qlc-$VERSION-$AARCH64_MAC_OSX.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
 
             cd "$CIRCLE_WORKING_DIRECTORY"
             ls -l archives
