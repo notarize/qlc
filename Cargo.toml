@@ -2,7 +2,7 @@
 name = "qlc"
 version = "0.10.0"
 authors = ["Eric Kim-Butler <eric.butler@notarize.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 autotests = false
 
