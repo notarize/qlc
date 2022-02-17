@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/notarize/qlc/compare/0.10.0...1.0.0)
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.58.1
+- Major upgrade of `clap` from v2 -> v3
+
 ## [0.10.0](https://github.com/notarize/qlc/compare/0.9.0...0.10.0)
 
 ### Features
