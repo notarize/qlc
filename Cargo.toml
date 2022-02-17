@@ -17,7 +17,7 @@ path = "tests/mod.rs"
 colored = "2"
 strsim = "0.10"
 crossbeam-channel = "0.5"
-graphql-parser = "0.3"
+graphql-parser = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = "2"
