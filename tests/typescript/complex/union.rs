@@ -77,7 +77,7 @@ query TestQuery {{
               annotations {{
                 edges {{
                   node {{
-                    {}
+                    {query_content}
                   }}
                 }}
               }}
@@ -88,8 +88,7 @@ query TestQuery {{
     }}
   }}
 }}
-        ",
-            query_content
+        "
         )
         .as_ref(),
         "TestQuery.ts",

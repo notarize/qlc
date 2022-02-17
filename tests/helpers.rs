@@ -19,9 +19,8 @@ pub fn contains_read_error(
     error_str: &str,
 ) -> impl predicates::Predicate<str> {
     contains(format!(
-        "error: could not read `{}`: {}",
+        "error: could not read `{}`: {error_str}",
         temp_dir.path().join(filename).display(),
-        error_str,
     ))
 }
 
@@ -31,13 +30,12 @@ pub fn contains_graphql_filename(
     position: Option<(usize, usize)>,
 ) -> impl predicates::Predicate<str> {
     let location = match position {
-        Some((line, col)) => format!(":{}:{}", line, col),
+        Some((line, col)) => format!(":{line}:{col}"),
         None => "".to_string(),
     };
     contains(format!(
-        "--> {}{}",
+        "--> {}{location}",
         temp_dir.path().join(filename).display(),
-        location,
     ))
 }
 

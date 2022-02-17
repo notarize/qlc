@@ -54,7 +54,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
         match error {
             Error::UnknownCustomeVariableType(name, position) => {
                 PrintableMessage::new_compile_error(
-                    &format!("unknown type for variable `{}`", name),
+                    &format!("unknown type for variable `{name}`"),
                     file_path,
                     contents,
                     &position,
@@ -63,7 +63,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
             }
             Error::UnprocessableVariableType(name, position) => {
                 PrintableMessage::new_program_error(
-                    &format!("failed to process variable `{}`", name),
+                    &format!("failed to process variable `{name}`"),
                     file_path,
                     contents,
                     &position,
@@ -73,7 +73,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 )
             }
             Error::ListOfListNotSupported(name, position) => PrintableMessage::new_compile_error(
-                &format!("unsupported list of lists type for variable `{}`", name),
+                &format!("unsupported list of lists type for variable `{name}`"),
                 file_path,
                 contents,
                 &position,

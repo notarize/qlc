@@ -30,21 +30,18 @@ impl From<Error> for PrintableMessage {
     fn from(error: Error) -> Self {
         match error {
             Error::MissingType(type_name) => PrintableMessage::new_simple_program_error(&format!(
-                "failed lookup of type `{}`",
-                type_name
+                "failed lookup of type `{type_name}`",
             )),
             Error::NotGlobalType(type_name) => {
                 PrintableMessage::new_simple_program_error(&format!(
-                    "unexpected global type of `{}`, which is not an enum nor input object",
-                    type_name
+                    "unexpected global type of `{type_name}`, which is not an enum nor input object",
                 ))
             }
             Error::InvalidFieldDef {
                 field_name,
                 field_type_name,
             } => PrintableMessage::new_simple_program_error(&format!(
-                "unexpected field `{}` of type `{}`: must be enum, another input object, or scalar",
-                field_name, field_type_name,
+                "unexpected field `{field_name}` of type `{field_type_name}`: must be enum, another input object, or scalar",
             )),
             Error::ExpectedAtLeastOnePossibility => PrintableMessage::new_simple_program_error(
                 "could not determine possiblities for complex type",
@@ -103,21 +100,21 @@ fn input_def_from_type(
         let field_type = from_input_def_field_def(config, name, field)?;
         let (_, last_type_mod) = field.type_description.type_modifiers();
         let ts_field = match last_type_mod {
-            schema_field::FieldTypeModifier::None => format!("  {}{}: {};", doc, name, field_type),
+            schema_field::FieldTypeModifier::None => format!("  {doc}{name}: {field_type};"),
             schema_field::FieldTypeModifier::Nullable => {
-                format!("  {}{}?: {} | null;", doc, name, field_type)
+                format!("  {doc}{name}?: {field_type} | null;")
             }
             schema_field::FieldTypeModifier::NullableList => {
-                format!("  {}{}?: {}[] | null;", doc, name, field_type)
+                format!("  {doc}{name}?: {field_type}[] | null;")
             }
             schema_field::FieldTypeModifier::List => {
-                format!("  {}{}: {}[];", doc, name, field_type)
+                format!("  {doc}{name}: {field_type}[];")
             }
             schema_field::FieldTypeModifier::ListOfNullable => {
-                format!("  {}{}: ({} | null)[];", doc, name, field_type)
+                format!("  {doc}{name}: ({field_type} | null)[];")
             }
             schema_field::FieldTypeModifier::NullableListOfNullable => {
-                format!("  {}{}?: ({} | null)[] | null;", doc, name, field_type)
+                format!("  {doc}{name}?: ({field_type} | null)[] | null;")
             }
         };
         fields.push(ts_field);
@@ -138,10 +135,10 @@ fn enum_def_from_type(
     let values = enum_type
         .possible_values
         .iter()
-        .map(|value| format!("  {} = \"{}\",", value, value))
+        .map(|value| format!("  {value} = \"{value}\","))
         .collect::<Vec<String>>()
         .join("\n");
-    format!("{}export enum {} {{\n{}\n}}", doc_comment, name, values)
+    format!("{doc_comment}export enum {name} {{\n{values}\n}}")
 }
 
 fn add_sub_input_objects<'a>(
@@ -232,7 +229,7 @@ pub fn compile_globals(
     let type_definitions = global_types_from_names(config, schema, global_names)?;
     Ok(GlobalTypesCompile {
         filename: String::from("globalTypes.ts"),
-        contents: format!("{}{}", HEADER, type_definitions.join("\n\n")),
+        contents: format!("{HEADER}{}", type_definitions.join("\n\n")),
     })
 }
 
@@ -241,10 +238,8 @@ fn compile_documentation(documentation: &schema::Documentation, tab_width: usize
         .as_ref()
         .map(|docs| {
             let tab = " ".repeat(tab_width);
-            let processed_desc = docs
-                .replace("\n", &format!("\n {}* ", tab))
-                .replace("*/", "");
-            format!("/**\n {}* {}\n {}*/\n{}", tab, processed_desc, tab, tab,)
+            let processed_desc = docs.replace("\n", &format!("\n {tab}* ")).replace("*/", "");
+            format!("/**\n {tab}* {processed_desc}\n {tab}*/\n{tab}")
         })
         .unwrap_or_else(|| String::from(""))
 }
@@ -256,7 +251,7 @@ fn compile_custom_scalar_name(
     match &config.bottom_type_config {
         BottomTypeConfig::DefaultBottomType => String::from("any"),
         BottomTypeConfig::RealName => string_thing.to_string(),
-        BottomTypeConfig::RealNameWithPrefix(s) => format!("{}{}", s, string_thing.to_string()),
+        BottomTypeConfig::RealNameWithPrefix(s) => format!("{s}{}", string_thing.to_string()),
     }
 }
 
@@ -275,12 +270,12 @@ fn prop_type_def(
 ) -> String {
     match type_modifier {
         schema_field::FieldTypeModifier::None => flat_type_name,
-        schema_field::FieldTypeModifier::Nullable => format!("{} | null", flat_type_name),
-        schema_field::FieldTypeModifier::List => format!("{}[]", flat_type_name),
-        schema_field::FieldTypeModifier::NullableList => format!("{}[] | null", flat_type_name),
-        schema_field::FieldTypeModifier::ListOfNullable => format!("({} | null)[]", flat_type_name),
+        schema_field::FieldTypeModifier::Nullable => format!("{flat_type_name} | null"),
+        schema_field::FieldTypeModifier::List => format!("{flat_type_name}[]"),
+        schema_field::FieldTypeModifier::NullableList => format!("{flat_type_name}[] | null"),
+        schema_field::FieldTypeModifier::ListOfNullable => format!("({flat_type_name} | null)[]"),
         schema_field::FieldTypeModifier::NullableListOfNullable => {
-            format!("({} | null)[] | null", flat_type_name)
+            format!("({flat_type_name} | null)[] | null")
         }
     }
 }
@@ -363,7 +358,7 @@ fn type_definitions_from_complex_field_collection(
             maybe_common_representative = Some(possibility);
             continue;
         }
-        let possiblity_prop_path = format!("{}_{}", main_type, possibility.name);
+        let possiblity_prop_path = format!("{main_type}_{}", possibility.name);
         definitions.append(&mut type_definitions_from_complex_ir(
             config,
             global_types,
@@ -374,7 +369,7 @@ fn type_definitions_from_complex_field_collection(
     }
 
     if let Some(common_representative) = maybe_common_representative {
-        let smoosh_type_name = format!("{}_$$other", main_type);
+        let smoosh_type_name = format!("{main_type}_$$other");
         definitions.append(&mut type_definitions_from_smoosh_complex_ir(
             config,
             global_types,
@@ -384,11 +379,7 @@ fn type_definitions_from_complex_field_collection(
         )?);
         names.push(smoosh_type_name);
     }
-    definitions.push(format!(
-        "export type {} = {};",
-        main_type,
-        names.join(" | ")
-    ));
+    definitions.push(format!("export type {main_type} = {};", names.join(" | ")));
     Ok(definitions)
 }
 
@@ -403,7 +394,7 @@ fn type_definitions_from_complex_ir<'a>(
     for field_ir in &complex_ir.fields {
         let flat_type_name = match &field_ir.type_ir {
             ir::FieldType::Complex(complex_collection) => {
-                let sub_prop_path = format!("{}_{}", prop_path, field_ir.prop_name);
+                let sub_prop_path = format!("{prop_path}_{}", field_ir.prop_name);
                 definitions.extend(type_definitions_from_complex_field_collection(
                     config,
                     global_types,
@@ -422,13 +413,12 @@ fn type_definitions_from_complex_ir<'a>(
         let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);
         let doc_comment = compile_documentation(&field_ir.documentation, 2);
         prop_defs.push(format!(
-            "  {}{}: {};",
-            doc_comment, field_ir.prop_name, prop_def_type
+            "  {doc_comment}{}: {prop_def_type};",
+            field_ir.prop_name,
         ));
     }
     definitions.push(format!(
-        "export type {} = {{\n{}\n}};",
-        prop_path,
+        "export type {prop_path} = {{\n{}\n}};",
         prop_defs.join("\n")
     ));
     Ok(definitions)
@@ -475,9 +465,9 @@ fn compile_variables_type_definition(
                         schema_field::FieldTypeModifier::Nullable
                         | schema_field::FieldTypeModifier::NullableList
                         | schema_field::FieldTypeModifier::NullableListOfNullable => {
-                            format!("  {}?: {};", var_ir.prop_name, type_def)
+                            format!("  {}?: {type_def};", var_ir.prop_name)
                         }
-                        _ => format!("  {}: {};", var_ir.prop_name, type_def),
+                        _ => format!("  {}: {type_def};", var_ir.prop_name),
                     };
                     Ok(compiled)
                 })
@@ -524,11 +514,8 @@ pub fn compile_ir(
     Ok(Compile {
         filename: format!("{}.ts", op_ir.name),
         contents: format!(
-            "{}{}{}{}",
-            HEADER,
-            imports,
+            "{HEADER}{imports}{}{variable_type_def}",
             type_definitions.join("\n\n"),
-            variable_type_def
         ),
         global_types_used,
     })

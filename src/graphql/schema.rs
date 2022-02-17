@@ -198,7 +198,7 @@ impl Schema {
 }
 
 fn printable_message_error(reason: &str) -> PrintableMessage {
-    PrintableMessage::new_simple_compile_error(&format!("malformed schema: {}", reason))
+    PrintableMessage::new_simple_compile_error(&format!("malformed schema: {reason}"))
 }
 
 pub fn parse_schema(path: &Path) -> Result<Schema, Vec<PrintableMessage>> {
@@ -214,23 +214,22 @@ pub fn parse_schema(path: &Path) -> Result<Schema, Vec<PrintableMessage>> {
             }
             Error::MissingNameForField => printable_message_error("missing name on field"),
             Error::UnknownType { name, kind } => printable_message_error(&format!(
-                "unknown type defintion `{}` on field `{}`",
-                kind, name
+                "unknown type defintion `{kind}` on field `{name}`",
             )),
             Error::FieldsMissingForType(name) => {
-                printable_message_error(&format!("complex type `{}` is missing fields", name))
+                printable_message_error(&format!("complex type `{name}` is missing fields"))
             }
             Error::EnumMissingValues(name) => {
-                printable_message_error(&format!("enum `{}` is missing variants", name))
+                printable_message_error(&format!("enum `{name}` is missing variants"))
             }
             Error::InterfaceMissingTypes(name) => {
-                printable_message_error(&format!("interface `{}` has no implementations", name))
+                printable_message_error(&format!("interface `{name}` has no implementations"))
             }
             Error::UnionMissingTypes(name) => {
-                printable_message_error(&format!("union `{}` has no implementations", name))
+                printable_message_error(&format!("union `{name}` has no implementations"))
             }
             Error::JsonParse(serde_error) => {
-                printable_message_error(&format!("JSON parse error: {}", serde_error))
+                printable_message_error(&format!("JSON parse error: {serde_error}"))
             }
         };
         vec![printable_message]

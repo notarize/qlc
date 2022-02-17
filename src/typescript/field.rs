@@ -9,7 +9,7 @@ pub fn compile_scalar(config: &CompileConfig, scalar: &ScalarType) -> String {
         ScalarType::Custom(name) => match &config.bottom_type_config {
             BottomTypeConfig::DefaultBottomType => String::from("any"),
             BottomTypeConfig::RealName => name.clone(),
-            BottomTypeConfig::RealNameWithPrefix(s) => format!("{}{}", s, name),
+            BottomTypeConfig::RealNameWithPrefix(s) => format!("{s}{name}"),
         },
     }
 }

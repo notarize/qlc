@@ -62,7 +62,7 @@ fn parse_graphql_file<'a, 'b>(
 ) -> Result<Document<'a, ParsedTextType>, PrintableMessage> {
     let parsed = graphql_parser::parse_query(contents).map_err(|parse_error| {
         // TODO parse error has no line/column information
-        let mut error = PrintableMessage::new_simple_compile_error(&format!("{}", parse_error));
+        let mut error = PrintableMessage::new_simple_compile_error(&format!("{parse_error}"));
         error.with_source_information(file_path, None);
         error
     })?;

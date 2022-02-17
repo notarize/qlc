@@ -271,12 +271,7 @@ impl PrintableMessage {
     ) -> Self {
         PrintableMessage {
             level: MessageLevel::CompileError,
-            message: format!(
-                "could not {} `{}`: {}",
-                operation_name,
-                path.display(),
-                error
-            ),
+            message: format!("could not {operation_name} `{}`: {error}", path.display()),
             source_information: None,
         }
     }
@@ -387,9 +382,8 @@ impl ConfigFileMatches {
                 })
                 .map_err(|serde_error| {
                     PrintableMessage::new_simple_program_error(&format!(
-                        "error in config file `{}`: {}",
+                        "error in config file `{}`: {serde_error}",
                         config_file_path.display(),
-                        serde_error
                     ))
                 }),
             Err(io_error) => {
@@ -538,8 +532,7 @@ pub fn print_exit_info(exit_info: impl ExitInformation) -> ! {
         println!(
             "{}",
             PrintableMessage::new_simple_compile_error(&format!(
-                "failure due to {} error{}",
-                error_count, plural
+                "failure due to {error_count} error{plural}",
             ))
         );
     }
@@ -548,8 +541,7 @@ pub fn print_exit_info(exit_info: impl ExitInformation) -> ! {
         println!(
             "{}",
             PrintableMessage::new_simple_compile_warning(&format!(
-                "{} warning{} emitted",
-                warning_count, plural
+                "{warning_count} warning{plural} emitted",
             ))
         );
     }

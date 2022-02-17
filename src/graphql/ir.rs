@@ -32,18 +32,17 @@ impl From<(&str, &Path, Warning)> for PrintableMessage {
                 possible_types,
                 spread_type_name,
             } => PrintableMessage::new_compile_warning(
-                &format!("fragment over narrowing with type `{}`", spread_type_name),
+                &format!("fragment over narrowing with type `{spread_type_name}`"),
                 file_path,
                 contents,
                 &position,
                 Some(&format!(
-                    "The parent types of this spread are limited to `{}`, making spreading `{}` uneeded.",
+                    "The parent types of this spread are limited to `{}`, making spreading `{spread_type_name}` uneeded.",
                     possible_types.join("`, `"),
-                    spread_type_name,
                 )),
             ),
             Warning::DeprecatedFieldUse { position, field_name, parent_type_name } => PrintableMessage::new_compile_warning(
-                &format!("use of deprecated field `{}` on type `{}`", field_name, parent_type_name),
+                &format!("use of deprecated field `{field_name}` on type `{parent_type_name}`"),
                 file_path,
                 contents,
                 &position,
@@ -128,11 +127,11 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 let extra = similar_help_suggestions(&name, possible_spread_names.into_iter())
                     .unwrap_or_else(|| " Did you forget to import it?".to_string());
                 PrintableMessage::new_compile_error(
-                    &format!("unknown spread fragment name `{}`", name),
+                    &format!("unknown spread fragment name `{name}`"),
                     file_path,
                     contents,
                     &position,
-                    Some(&format!("This fragment name doesn't appear to be in scope.{}", extra)),
+                    Some(&format!("This fragment name doesn't appear to be in scope.{extra}")),
                 )
             }
             Error::MissingTypeConditionOnInlineFragment(position) => PrintableMessage::new_compile_error(
@@ -143,7 +142,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 Some("Fragments must specify a type they can be spread on."),
             ),
             Error::SelectionSetOnWrongType(name, position) => PrintableMessage::new_compile_error(
-                &format!("unexpected selection on field of type `{}`", name),
+                &format!("unexpected selection on field of type `{name}`"),
                 file_path,
                 contents,
                 &position,
@@ -151,7 +150,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
             ),
             Error::MissingSelectionSetOnType(name, position) => {
                 PrintableMessage::new_compile_error(
-                    &format!("expected selection on field of type `{}`", name),
+                    &format!("expected selection on field of type `{name}`"),
                     file_path,
                     contents,
                     &position,
@@ -166,32 +165,32 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
             } => {
                 let extra = similar_help_suggestions(&field_name, possible_field_names.into_iter()).unwrap_or_else(String::new);
                 PrintableMessage::new_compile_error(
-                    &format!("unknown field `{}`", field_name),
+                    &format!("unknown field `{field_name}`"),
                     file_path,
                     contents,
                     &position,
-                    Some(&format!("Check the fields of `{}`.{}", parent_type_name, extra)),
+                    Some(&format!("Check the fields of `{parent_type_name}`.{extra}")),
                 )
             }
             Error::Variable(var_error) => {
                 PrintableMessage::from((contents, file_path, var_error))
             }
             Error::MissingType(type_name) => PrintableMessage::new_simple_program_error(
-                &format!("failed lookup of type `{}`", type_name),
+                &format!("failed lookup of type `{type_name}`"),
             ),
             Error::InputObjectOnSelection { type_name, field_name } => {
                 PrintableMessage::new_simple_program_error(
-                    &format!("unexpectedly traversing field `{}` with input object type `{}`", field_name, type_name),
+                    &format!("unexpectedly traversing field `{field_name}` with input object type `{type_name}`")
                 )
             }
             Error::UnexpectedComplexTravseral(type_name) => {
                 PrintableMessage::new_simple_program_error(
-                    &format!("unexpectedly traversing a terminal of type `{}`", type_name),
+                    &format!("unexpectedly traversing a terminal of type `{type_name}`"),
                 )
             }
             Error::MixedTerminalAndComplexFields { complex_type_name, terminal_type_name } => {
                 PrintableMessage::new_simple_program_error(
-                    &format!("unexpectedly attempting merge of complex type `{}` and terminal type `{}`.", complex_type_name, terminal_type_name),
+                    &format!("unexpectedly attempting merge of complex type `{complex_type_name}` and terminal type `{terminal_type_name}`."),
                 )
             }
         }
