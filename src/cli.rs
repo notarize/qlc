@@ -1,5 +1,5 @@
 use crate::graphql::BottomTypeConfig;
-use clap::{crate_authors, crate_version, App, Arg, ArgMatches};
+use clap::{crate_version, Arg, ArgMatches, Command};
 use colored::{control, Colorize};
 use graphql_parser::Pos;
 use serde::Deserialize;
@@ -287,39 +287,38 @@ impl ExitInformation for Vec<PrintableMessage> {
     }
 }
 
-fn arg_parse<'a>() -> ArgMatches<'a> {
-    App::new("QL Compiler")
+fn arg_parse() -> ArgMatches {
+    Command::new("QL Compiler")
         .version(crate_version!())
-        .author(crate_authors!())
         .about("\nQL Compiler (qlc) compiles type definitions from graphql and introspection JSON.")
         .arg(
-            Arg::with_name("root_dir")
+            Arg::new("root_dir")
                 .value_name("ROOT_DIR")
                 .help("Directory to recursively compile"),
         )
         .arg(
-            Arg::with_name("config_file_path")
+            Arg::new("config_file_path")
                 .takes_value(true)
                 .value_name("FILE_PATH")
-                .short("c")
+                .short('c')
                 .long("config-file")
                 .help("Path of JSON configuration file"),
         )
         .arg(
-            Arg::with_name("schema_path")
+            Arg::new("schema_path")
                 .takes_value(true)
                 .value_name("FILE_PATH")
-                .short("s")
+                .short('s')
                 .long("schema-file")
                 .help("Path of schema introspection JSON file (defaults to <ROOT_DIR>/schema.json)"),
         )
         .arg(
-            Arg::with_name("use_custom_scalars")
+            Arg::new("use_custom_scalars")
                 .long("use-custom-scalars")
                 .help("Use custom schema defined scalar names for types instead of any type"),
         )
         .arg(
-            Arg::with_name("custom_scalar_prefix")
+            Arg::new("custom_scalar_prefix")
                 .takes_value(true)
                 .value_name("PREFIX")
                 .requires("use_custom_scalars")
@@ -327,12 +326,12 @@ fn arg_parse<'a>() -> ArgMatches<'a> {
                 .help("Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars"),
         )
         .arg(
-            Arg::with_name("show_deprecation_warnings")
+            Arg::new("show_deprecation_warnings")
                 .long("show-deprecation-warnings")
                 .help("Enable warnings for deprecated field usage"),
         )
         .arg(
-            Arg::with_name("nthreads")
+            Arg::new("nthreads")
                 .long("num-threads")
                 .value_name("NUMBER")
                 .takes_value(true)
@@ -340,7 +339,7 @@ fn arg_parse<'a>() -> ArgMatches<'a> {
                 .help("Sets the number of threads (defaults to number of CPU cores)"),
         )
         .arg(
-            Arg::with_name("no_color")
+            Arg::new("no_color")
                 .long("no-color")
                 .help("Use this flag to disable colors"),
         )
