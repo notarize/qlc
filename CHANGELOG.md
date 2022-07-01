@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/notarize/qlc/compare/1.0.0...1.0.1)
+
+### Chores
+
+- Upgrade dependencies and Rust to 1.62.0
+
 ## [1.0.0](https://github.com/notarize/qlc/compare/0.10.0...1.0.0)
 
 ### Chores
