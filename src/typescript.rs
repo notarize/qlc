@@ -238,7 +238,7 @@ fn compile_documentation(documentation: &schema::Documentation, tab_width: usize
         .as_ref()
         .map(|docs| {
             let tab = " ".repeat(tab_width);
-            let processed_desc = docs.replace("\n", &format!("\n {tab}* ")).replace("*/", "");
+            let processed_desc = docs.replace('\n', &format!("\n {tab}* ")).replace("*/", "");
             format!("/**\n {tab}* {processed_desc}\n {tab}*/\n{tab}")
         })
         .unwrap_or_else(|| String::from(""))

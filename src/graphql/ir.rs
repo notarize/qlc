@@ -163,7 +163,7 @@ impl From<(&str, &Path, Error)> for PrintableMessage {
                 position,
                 possible_field_names,
             } => {
-                let extra = similar_help_suggestions(&field_name, possible_field_names.into_iter()).unwrap_or_else(String::new);
+                let extra = similar_help_suggestions(&field_name, possible_field_names.into_iter()).unwrap_or_default();
                 PrintableMessage::new_compile_error(
                     &format!("unknown field `{field_name}`"),
                     file_path,
