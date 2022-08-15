@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/notarize/qlc/compare/1.0.0...1.0.1)
+
+### Chores
+
+- Switched to `std::thread::scope` for threading, removing need for `Arc`
+- Upgrade dependencies and Rust to 1.63.0
+- Major upgrade of `assert_cmd` from v1 -> v2
+
 ## [1.0.1](https://github.com/notarize/qlc/compare/1.0.0...1.0.1)
 
 ### Chores
