@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -98,7 +97,7 @@ impl Work {
         Ok(more_work)
     }
 
-    fn run(&self, config: &CompileConfig, schema: &Arc<Schema>) -> WorkResult {
+    fn run(&self, config: &CompileConfig, schema: &Schema) -> WorkResult {
         match self {
             Work::DirEntry(path) => self
                 .run_dir_entry(path)
@@ -117,23 +116,21 @@ impl Work {
     }
 }
 
-struct Worker {
-    compile_config: Arc<CompileConfig>,
-    schema: Arc<Schema>,
+struct Worker<'a> {
+    pool: &'a WorkerPool,
     is_waiting: bool,
     is_quitting: bool,
     aggregate: WorkAggregateResult,
-    num_waiting: Arc<AtomicUsize>,
-    num_quitting: Arc<AtomicUsize>,
-    thread_count: usize,
+    num_waiting: &'a AtomicUsize,
+    num_quitting: &'a AtomicUsize,
     tx: channel::Sender<Message>,
     rx: channel::Receiver<Message>,
 }
 
-impl Worker {
+impl<'a> Worker<'a> {
     fn run(mut self) -> WorkAggregateResult {
         while let Some(work) = self.pop_work() {
-            match work.run(&self.compile_config, &self.schema) {
+            match work.run(&self.pool.compile_config, &self.pool.schema) {
                 WorkResult::CompileResult {
                     global_types_used,
                     messages,
@@ -170,7 +167,7 @@ impl Worker {
                     loop {
                         let nwait = self.num_waiting();
                         let nquit = self.num_quitting();
-                        let threads = self.thread_count;
+                        let threads = self.pool.thread_count;
                         // If the number of waiting workers dropped, then abort our attempt to quit.
                         // Sometimes work will come back.
                         if nwait < threads {
@@ -183,7 +180,7 @@ impl Worker {
                     }
                 }
                 Err(_) => {
-                    let threads = self.thread_count;
+                    let threads = self.pool.thread_count;
                     self.set_waiting(true);
                     self.set_quitting(false);
                     if self.num_waiting() == threads {
@@ -230,54 +227,53 @@ impl Worker {
 }
 
 pub struct WorkerPool {
-    compile_config: Arc<CompileConfig>,
+    compile_config: CompileConfig,
     root_dir_path: PathBuf,
-    schema: Arc<Schema>,
+    schema: Schema,
     thread_count: usize,
 }
 
 impl WorkerPool {
     pub fn new(runtime_config: RuntimeConfig, schema: Schema) -> Self {
         WorkerPool {
-            compile_config: Arc::new(CompileConfig::from(&runtime_config)),
+            compile_config: CompileConfig::from(&runtime_config),
             root_dir_path: runtime_config.root_dir_path(),
-            schema: Arc::new(schema),
+            schema,
             thread_count: runtime_config.thread_count(),
         }
     }
 
     pub fn work(&self) -> impl ExitInformation {
-        let (tx, rx) = channel::unbounded();
-        let num_waiting = Arc::new(AtomicUsize::new(0));
-        let num_quitting = Arc::new(AtomicUsize::new(0));
-        let mut handles = Vec::with_capacity(self.thread_count);
-        let initial_work = Work::DirEntry(self.root_dir_path.clone());
-        let root = Message::Work(initial_work);
-        tx.send(root).unwrap();
-        for _ in 0..self.thread_count {
-            let worker = Worker {
-                schema: self.schema.clone(),
-                num_quitting: num_quitting.clone(),
-                num_waiting: num_waiting.clone(),
-                aggregate: WorkAggregateResult::new(),
-                is_quitting: false,
-                is_waiting: false,
-                tx: tx.clone(),
-                rx: rx.clone(),
-                compile_config: self.compile_config.clone(),
-                thread_count: self.thread_count,
-            };
-            let handle = thread::spawn(|| worker.run());
-            handles.push(handle);
-        }
-        drop(tx);
-        drop(rx);
+        let num_waiting = AtomicUsize::new(0);
+        let num_quitting = AtomicUsize::new(0);
 
-        let mut aggregate = WorkAggregateResult::new();
-        for handle in handles {
-            let sub_aggregate = handle.join().unwrap();
-            aggregate.extend_from(sub_aggregate);
-        }
+        let mut aggregate = thread::scope(|s| {
+            let (tx, rx) = channel::unbounded();
+            let initial_work = Message::Work(Work::DirEntry(self.root_dir_path.clone()));
+            tx.send(initial_work).unwrap();
+
+            let handles = (0..self.thread_count)
+                .map(|_| {
+                    let worker = Worker {
+                        pool: self,
+                        num_quitting: &num_quitting,
+                        num_waiting: &num_waiting,
+                        aggregate: WorkAggregateResult::new(),
+                        is_quitting: false,
+                        is_waiting: false,
+                        tx: tx.clone(),
+                        rx: rx.clone(),
+                    };
+                    s.spawn(|| worker.run())
+                })
+                .collect::<Vec<_>>();
+
+            let mut aggregate = WorkAggregateResult::new();
+            for handle in handles {
+                aggregate.extend_from(handle.join().unwrap());
+            }
+            aggregate
+        });
 
         if let Err(global_type_error) = compile_global_types_file(
             &self.root_dir_path,
