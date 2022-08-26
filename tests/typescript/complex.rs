@@ -216,7 +216,7 @@ fragment absoluteUserFragmentTwo on User {
         &temp_dir,
         "TestQuery.ts",
         r#"
-import { UserRole } from "__generated__/globalTypes";
+import type { UserRole } from "__generated__/globalTypes";
 
 export type TestQuery_viewer_user_customerProfile = {
   id: string;
@@ -374,7 +374,7 @@ fragment userFragmentTwo on User {
         &temp_dir,
         "TestQuery.ts",
         r#"
-import { Feature, UserRole } from "__generated__/globalTypes";
+import type { Feature, UserRole } from "__generated__/globalTypes";
 
 export type TestQuery_viewer_user_scheduled_tiers = {
   /**

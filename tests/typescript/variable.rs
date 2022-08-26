@@ -45,7 +45,7 @@ mutation CatDocs($input: CategorizeDocumentsInput!) {
         ",
         "CatDocs.ts",
         r#"
-import { CategorizeDocumentsInput } from "__generated__/globalTypes";
+import type { CategorizeDocumentsInput } from "__generated__/globalTypes";
 
 export type CatDocs_categorizeDocuments = {
   success: boolean;
@@ -122,7 +122,7 @@ mutation AddCheckmarkAnnotation($input: AddCheckmarkAnnotationInput!) {
     ",
         "AddCheckmarkAnnotation.ts",
         r#"
-import { AddCheckmarkAnnotationInput } from "__generated__/globalTypes";
+import type { AddCheckmarkAnnotationInput } from "__generated__/globalTypes";
 
 export type AddCheckmarkAnnotation_addCheckmarkAnnotation_annotation = {
   id: string;

@@ -491,7 +491,7 @@ fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
     let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
     sorted_names.sort_unstable();
     format!(
-        "import {{ {} }} from \"__generated__/globalTypes\";\n\n",
+        "import type {{ {} }} from \"__generated__/globalTypes\";\n\n",
         sorted_names.join(", ")
     )
 }

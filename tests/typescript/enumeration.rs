@@ -14,7 +14,7 @@ query TestQuery {
         ",
         "TestQuery.ts",
         r#"
-import { MeetingEndedState } from "__generated__/globalTypes";
+import type { MeetingEndedState } from "__generated__/globalTypes";
 
 export type TestQuery_meeting_Meeting = {
   endedState: MeetingEndedState;
