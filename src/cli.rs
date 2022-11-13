@@ -545,6 +545,5 @@ pub fn print_exit_info(exit_info: impl ExitInformation) -> ! {
         );
     }
 
-    let code = if has_errors { 1 } else { 0 };
-    std::process::exit(code);
+    std::process::exit(i32::from(has_errors));
 }
