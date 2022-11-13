@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0](https://github.com/notarize/qlc/compare/2.0.0...2.1.0)
+
+### Features
+
+- Add support for module name and paths in CLI and JSON config
+  - `--root-dir-import-prefix` to configure a prefix on import module for build system resolve aliases
+  - `--global-types-module-name` to configure `globalTypes` name
+  - `--generated-module-name` to configure `__generated__` name
+
+### Chores
+
+- Upgrade to Rust 1.65.0
+- Upgrade dependencies
+
 ## [2.0.0](https://github.com/notarize/qlc/compare/1.0.2...2.0.0)
 
 ### Features
