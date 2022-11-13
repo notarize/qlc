@@ -331,6 +331,27 @@ fn arg_parse() -> ArgMatches {
                 .help("Enable warnings for deprecated field usage"),
         )
         .arg(
+            Arg::new("root_dir_import_prefix")
+                .long("root-dir-import-prefix")
+                .value_name("PREFIX")
+                .takes_value(true)
+                .help("Sets an import prefix for the root directory, ie `@/` to get `import {..} from \"@/__generated__\"`"),
+        )
+        .arg(
+            Arg::new("global_types_module_name")
+                .long("global-types-module-name")
+                .value_name("MODULENAME")
+                .takes_value(true)
+                .help("Sets the file name used for global enums and objects, defaults to `globalTypes`"),
+        )
+        .arg(
+            Arg::new("generated_module_name")
+                .long("generated-module-name")
+                .value_name("MODULENAME")
+                .takes_value(true)
+                .help("Sets the directory name used for type definitions, defaults to `__generated__`"),
+        )
+        .arg(
             Arg::new("nthreads")
                 .long("num-threads")
                 .value_name("NUMBER")
@@ -359,6 +380,12 @@ struct ConfigFileMatches {
     nthreads: Option<usize>,
     #[serde(rename(deserialize = "showDeprecationWarnings"))]
     show_deprecation_warnings: Option<bool>,
+    #[serde(rename(deserialize = "rootDirImportPrefix"))]
+    root_dir_import_prefix: Option<String>,
+    #[serde(rename(deserialize = "globalTypesModuleName"))]
+    global_types_module_name: Option<String>,
+    #[serde(rename(deserialize = "generatedModuleName"))]
+    generated_module_name: Option<String>,
 }
 
 impl ConfigFileMatches {
@@ -408,6 +435,9 @@ pub struct RuntimeConfig {
     use_custom_scalars: bool,
     custom_scalar_prefix: Option<String>,
     number_threads: usize,
+    root_dir_import_prefix: String,
+    global_types_module_name: String,
+    generated_module_name: String,
 }
 
 impl RuntimeConfig {
@@ -424,6 +454,9 @@ impl RuntimeConfig {
             custom_scalar_prefix: config_custom_scalar_prefix,
             nthreads: config_nthreads,
             show_deprecation_warnings: config_show_deprecation_warnings,
+            root_dir_import_prefix: config_root_dir_import_prefix,
+            global_types_module_name: config_global_types_module_name,
+            generated_module_name: config_generated_module_name,
         } = match ConfigFileMatches::from_file_parse(arg_matches.value_of("config_file_path")) {
             Ok(matches) => matches,
             Err(config_error_message) => {
@@ -454,6 +487,21 @@ impl RuntimeConfig {
             .and_then(|st| st.parse().ok())
             .or(config_nthreads)
             .unwrap_or_else(|| std::cmp::min(num_cpus::get(), 8));
+        let root_dir_import_prefix = arg_matches
+            .value_of("root_dir_import_prefix")
+            .map(|s| s.to_string())
+            .or(config_root_dir_import_prefix)
+            .unwrap_or_else(|| String::from(""));
+        let global_types_module_name = arg_matches
+            .value_of("global_types_module_name")
+            .map(|s| s.to_string())
+            .or(config_global_types_module_name)
+            .unwrap_or_else(|| String::from("globalTypes"));
+        let generated_module_name = arg_matches
+            .value_of("generated_module_name")
+            .map(|s| s.to_string())
+            .or(config_generated_module_name)
+            .unwrap_or_else(|| String::from("__generated__"));
 
         RuntimeConfig {
             root_dir,
@@ -462,6 +510,9 @@ impl RuntimeConfig {
             use_custom_scalars,
             custom_scalar_prefix,
             number_threads,
+            root_dir_import_prefix,
+            global_types_module_name,
+            generated_module_name,
         }
     }
 
@@ -487,6 +538,18 @@ impl RuntimeConfig {
 
     pub fn thread_count(&self) -> usize {
         self.number_threads
+    }
+
+    pub fn root_dir_import_prefix(&self) -> String {
+        self.root_dir_import_prefix.clone()
+    }
+
+    pub fn global_types_module_name(&self) -> String {
+        self.global_types_module_name.clone()
+    }
+
+    pub fn generated_module_name(&self) -> String {
+        self.generated_module_name.clone()
     }
 }
 

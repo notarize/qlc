@@ -33,6 +33,9 @@ pub struct CompileConfig {
     root_dir: PathBuf,
     show_deprecation_warnings: bool,
     pub bottom_type_config: BottomTypeConfig,
+    pub root_dir_import_prefix: String,
+    pub global_types_module_name: String,
+    pub generated_module_name: String,
 }
 
 impl From<&RuntimeConfig> for CompileConfig {
@@ -41,6 +44,9 @@ impl From<&RuntimeConfig> for CompileConfig {
             root_dir: from.root_dir_path(),
             bottom_type_config: from.bottom_type_config(),
             show_deprecation_warnings: from.show_deprecation_warnings(),
+            root_dir_import_prefix: from.root_dir_import_prefix(),
+            global_types_module_name: from.global_types_module_name(),
+            generated_module_name: from.generated_module_name(),
         }
     }
 }
@@ -101,25 +107,35 @@ fn makedir_p(path: &Path) -> Result<(), PrintableMessage> {
     }
 }
 
-fn make_generated_dir(mut path: PathBuf) -> Result<PathBuf, PrintableMessage> {
-    path.push("__generated__");
+fn make_generated_dir(
+    config: &CompileConfig,
+    mut path: PathBuf,
+) -> Result<PathBuf, PrintableMessage> {
+    path.push(&config.generated_module_name);
     makedir_p(&path)?;
     Ok(path)
 }
 
-fn get_file_path_of_fragment(import_comment: &str, current_dir: &Path, root_dir: &Path) -> PathBuf {
+fn get_file_path_of_fragment(
+    config: &CompileConfig,
+    import_comment: &str,
+    current_dir: &Path,
+) -> PathBuf {
     let last_quote = import_comment
         .rfind('"')
         .unwrap_or(import_comment.len() - 1);
-    let import_filename = &import_comment[9..last_quote];
-    if import_filename.starts_with('.') {
+    let mut import_filename = &import_comment[IMPORT_START.len()..last_quote];
+    let root_dir_prefix = &config.root_dir_import_prefix;
+    if import_filename.starts_with(root_dir_prefix) {
+        import_filename = &import_filename[root_dir_prefix.len()..];
+    } else if import_filename.starts_with('.') {
         return current_dir.join(import_filename);
     }
-    root_dir.join(import_filename)
+    config.root_dir.join(import_filename)
 }
 
 fn add_imported_fragments(
-    root_dir: &Path,
+    config: &CompileConfig,
     current_file: &Path,
     current_file_contents: &str,
     import_contents: &mut HashMap<PathBuf, (String, LocationInformation)>,
@@ -141,7 +157,7 @@ fn add_imported_fragments(
         }
         let location =
             LocationInformation::new_from_line_and_column(line_index + 1, line, IMPORT_START.len());
-        let file_path = get_file_path_of_fragment(line, &current_dir, root_dir);
+        let file_path = get_file_path_of_fragment(config, line, &current_dir);
         let other_file_contents = match read_graphql_file(&file_path) {
             Ok(c) => c,
             Err(mut sub_message) => {
@@ -151,7 +167,7 @@ fn add_imported_fragments(
             }
         };
         add_imported_fragments(
-            root_dir,
+            config,
             &file_path,
             &other_file_contents,
             import_contents,
@@ -205,7 +221,7 @@ pub fn compile_file(
     let mut messages = Vec::new();
     let mut imported_contents = HashMap::new();
     add_imported_fragments(
-        &config.root_dir,
+        config,
         path,
         &contents,
         &mut imported_contents,
@@ -250,7 +266,7 @@ pub fn compile_file(
 
     let mut parent_dir = path.to_path_buf();
     parent_dir.pop();
-    let mut generated_dir_path = match make_generated_dir(parent_dir) {
+    let mut generated_dir_path = match make_generated_dir(config, parent_dir) {
         Ok(path) => path,
         Err(error) => {
             messages.push(error);
@@ -281,7 +297,7 @@ pub fn compile_global_types_file(
     if global_names.is_empty() {
         return Ok(());
     }
-    let mut generated_dir_path = make_generated_dir(path.to_path_buf())?;
+    let mut generated_dir_path = make_generated_dir(config, path.to_path_buf())?;
     let the_compile = typescript::compile_globals(config, schema, global_names)?;
     generated_dir_path.push(the_compile.filename);
     std::fs::write(&generated_dir_path, the_compile.contents).map_err(|io_error| {

@@ -228,7 +228,7 @@ pub fn compile_globals(
 ) -> Result<GlobalTypesCompile> {
     let type_definitions = global_types_from_names(config, schema, global_names)?;
     Ok(GlobalTypesCompile {
-        filename: String::from("globalTypes.ts"),
+        filename: format!("{}.ts", config.global_types_module_name),
         contents: format!("{HEADER}{}", type_definitions.join("\n\n")),
     })
 }
@@ -483,7 +483,7 @@ fn compile_variables_type_definition(
     }
 }
 
-fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
+fn compile_imports(config: &CompileConfig, used_globals: &HashSet<String>) -> Typescript {
     if used_globals.is_empty() {
         return String::from("");
     }
@@ -491,8 +491,11 @@ fn compile_imports(used_globals: &HashSet<String>) -> Typescript {
     let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
     sorted_names.sort_unstable();
     format!(
-        "import type {{ {} }} from \"__generated__/globalTypes\";\n\n",
-        sorted_names.join(", ")
+        "import type {{ {} }} from \"{}{}/{}\";\n\n",
+        sorted_names.join(", "),
+        config.root_dir_import_prefix,
+        config.generated_module_name,
+        config.global_types_module_name,
     )
 }
 
@@ -510,7 +513,7 @@ pub fn compile_ir(
     )?;
     let variable_type_def =
         compile_variables_type_definition(config, schema, &mut global_types_used, op_ir)?;
-    let imports = compile_imports(&global_types_used);
+    let imports = compile_imports(config, &global_types_used);
     Ok(Compile {
         filename: format!("{}.ts", op_ir.name),
         contents: format!(
