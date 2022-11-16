@@ -24,7 +24,7 @@ executors:
 
   github_api_client:
     docker:
-      - image: notarize/github-api-client:ghr-0.14.0
+      - image: notarize/github-api-client:ghr-0.16.0
     working_directory: /root/notarize/qlc
 
   node_env:
