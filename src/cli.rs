@@ -435,7 +435,7 @@ pub struct RuntimeConfig {
     use_custom_scalars: bool,
     custom_scalar_prefix: Option<String>,
     number_threads: usize,
-    root_dir_import_prefix: String,
+    root_dir_import_prefix: Option<String>,
     global_types_module_name: String,
     generated_module_name: String,
 }
@@ -490,8 +490,7 @@ impl RuntimeConfig {
         let root_dir_import_prefix = arg_matches
             .value_of("root_dir_import_prefix")
             .map(|s| s.to_string())
-            .or(config_root_dir_import_prefix)
-            .unwrap_or_else(|| String::from(""));
+            .or(config_root_dir_import_prefix);
         let global_types_module_name = arg_matches
             .value_of("global_types_module_name")
             .map(|s| s.to_string())
@@ -540,7 +539,7 @@ impl RuntimeConfig {
         self.number_threads
     }
 
-    pub fn root_dir_import_prefix(&self) -> String {
+    pub fn root_dir_import_prefix(&self) -> Option<String> {
         self.root_dir_import_prefix.clone()
     }
 

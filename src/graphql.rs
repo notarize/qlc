@@ -33,7 +33,7 @@ pub struct CompileConfig {
     root_dir: PathBuf,
     show_deprecation_warnings: bool,
     pub bottom_type_config: BottomTypeConfig,
-    pub root_dir_import_prefix: String,
+    pub root_dir_import_prefix: Option<String>,
     pub global_types_module_name: String,
     pub generated_module_name: String,
 }
@@ -124,14 +124,20 @@ fn get_file_path_of_fragment(
     let last_quote = import_comment
         .rfind('"')
         .unwrap_or(import_comment.len() - 1);
-    let mut import_filename = &import_comment[IMPORT_START.len()..last_quote];
-    let root_dir_prefix = &config.root_dir_import_prefix;
-    if import_filename.starts_with(root_dir_prefix) {
-        import_filename = &import_filename[root_dir_prefix.len()..];
-    } else if import_filename.starts_with('.') {
-        return current_dir.join(import_filename);
-    }
-    config.root_dir.join(import_filename)
+    let import_path = &import_comment[IMPORT_START.len()..last_quote];
+
+    config
+        .root_dir_import_prefix
+        .as_deref()
+        .and_then(|root_dir_prefix| import_path.strip_prefix(root_dir_prefix))
+        .map(|import_path_without_prefix| config.root_dir.join(import_path_without_prefix))
+        .unwrap_or_else(|| {
+            if import_path.starts_with('.') {
+                current_dir.join(import_path)
+            } else {
+                config.root_dir.join(import_path)
+            }
+        })
 }
 
 fn add_imported_fragments(

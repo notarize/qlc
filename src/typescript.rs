@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 mod field;
 
+const EMPTY: &str = "";
 const HEADER: &str = "/* tslint:disable */
 /* eslint-disable */
 // This file was automatically generated and should not be edited.
@@ -238,10 +239,12 @@ fn compile_documentation(documentation: &schema::Documentation, tab_width: usize
         .as_ref()
         .map(|docs| {
             let tab = " ".repeat(tab_width);
-            let processed_desc = docs.replace('\n', &format!("\n {tab}* ")).replace("*/", "");
+            let processed_desc = docs
+                .replace('\n', &format!("\n {tab}* "))
+                .replace("*/", EMPTY);
             format!("/**\n {tab}* {processed_desc}\n {tab}*/\n{tab}")
         })
-        .unwrap_or_else(|| String::from(""))
+        .unwrap_or_else(|| String::from(EMPTY))
 }
 
 fn compile_custom_scalar_name(
@@ -431,7 +434,7 @@ fn compile_variables_type_definition(
     op_ir: &ir::Operation<'_>,
 ) -> Result<Typescript> {
     match op_ir.variables {
-        None => Ok("".to_string()),
+        None => Ok(EMPTY.to_string()),
         Some(ref var_irs) => {
             let prop_defs: Result<Vec<_>> = var_irs
                 .iter()
@@ -485,7 +488,7 @@ fn compile_variables_type_definition(
 
 fn compile_imports(config: &CompileConfig, used_globals: &HashSet<String>) -> Typescript {
     if used_globals.is_empty() {
-        return String::from("");
+        return String::from(EMPTY);
     }
     // For test and file signature stability
     let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
@@ -493,7 +496,7 @@ fn compile_imports(config: &CompileConfig, used_globals: &HashSet<String>) -> Ty
     format!(
         "import type {{ {} }} from \"{}{}/{}\";\n\n",
         sorted_names.join(", "),
-        config.root_dir_import_prefix,
+        config.root_dir_import_prefix.as_deref().unwrap_or(EMPTY),
         config.generated_module_name,
         config.global_types_module_name,
     )
