@@ -10,8 +10,7 @@ use std::process::{Command, Stdio};
 
 const DEFAULT_QLCRC_JSON_PATH: &str = ".qlcrc.json";
 const FIXTURE_ROOT_PATH: &str = "tests/fixtures";
-const TS_FILE_HEADER: &str = "/* tslint:disable */
-/* eslint-disable */
+const TS_FILE_HEADER: &str = "/* eslint-disable */
 // This file was automatically generated and should not be edited.
 
 ";

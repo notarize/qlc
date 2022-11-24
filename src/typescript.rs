@@ -10,8 +10,7 @@ use std::collections::{HashMap, HashSet};
 mod field;
 
 const EMPTY: &str = "";
-const HEADER: &str = "/* tslint:disable */
-/* eslint-disable */
+const HEADER: &str = "/* eslint-disable */
 // This file was automatically generated and should not be edited.
 
 ";
