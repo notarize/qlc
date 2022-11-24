@@ -425,8 +425,13 @@ fn type_definitions_from_complex_ir<'a>(
         };
         let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);
         let doc_comment = compile_documentation(&field_ir.documentation, field_ir.deprecated, 2);
+        let readonly_modifier = if config.use_readonly_types {
+            "readonly "
+        } else {
+            EMPTY
+        };
         prop_defs.push(format!(
-            "  {doc_comment}{}: {prop_def_type};",
+            "  {doc_comment}{readonly_modifier}{}: {prop_def_type};",
             field_ir.prop_name,
         ));
     }

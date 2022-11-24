@@ -1,17 +1,17 @@
 import type { OperatingSystem } from "__generated__/globalTypes";
 
 export type WithGlobals_operator_personalHost = {
-  id: string;
-  operatingSystem: OperatingSystem;
+  readonly id: string;
+  readonly operatingSystem: OperatingSystem;
 };
 
 export type WithGlobals_operator = {
   /**
    * A user's personal device
    */
-  personalHost: WithGlobals_operator_personalHost;
+  readonly personalHost: WithGlobals_operator_personalHost;
 };
 
 export type WithGlobals = {
-  operator: WithGlobals_operator | null;
+  readonly operator: WithGlobals_operator | null;
 };

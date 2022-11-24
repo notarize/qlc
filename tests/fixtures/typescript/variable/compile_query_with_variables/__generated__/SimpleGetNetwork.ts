@@ -1,10 +1,10 @@
 export type SimpleGetNetwork_network = {
-  cidr: string;
-  id: string;
+  readonly cidr: string;
+  readonly id: string;
 };
 
 export type SimpleGetNetwork = {
-  network: SimpleGetNetwork_network | null;
+  readonly network: SimpleGetNetwork_network | null;
 };
 
 export type SimpleGetNetworkVariables = {

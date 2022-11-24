@@ -1,24 +1,24 @@
 export type GetTagsForNetwork_network_tags_author_tags = {
-  timeToLiveMs: number;
+  readonly timeToLiveMs: number;
 };
 
 export type GetTagsForNetwork_network_tags_author = {
-  __typename: "User";
-  id: string;
-  tags: GetTagsForNetwork_network_tags_author_tags[];
+  readonly __typename: "User";
+  readonly id: string;
+  readonly tags: GetTagsForNetwork_network_tags_author_tags[];
 };
 
 export type GetTagsForNetwork_network_tags = {
-  __typename: "BooleanTag" | "JSONTag" | "KeyValueTag";
-  author: GetTagsForNetwork_network_tags_author;
-  timeToLiveMs: number;
+  readonly __typename: "BooleanTag" | "JSONTag" | "KeyValueTag";
+  readonly author: GetTagsForNetwork_network_tags_author;
+  readonly timeToLiveMs: number;
 };
 
 export type GetTagsForNetwork_network = {
-  id: string;
-  tags: GetTagsForNetwork_network_tags[];
+  readonly id: string;
+  readonly tags: GetTagsForNetwork_network_tags[];
 };
 
 export type GetTagsForNetwork = {
-  network: GetTagsForNetwork_network | null;
+  readonly network: GetTagsForNetwork_network | null;
 };

@@ -1,4 +1,4 @@
 export type RootCheck = {
-  id: string;
-  numCpus: number;
+  readonly id: string;
+  readonly numCpus: number;
 };

@@ -1,9 +1,9 @@
 export type SimpleQuery_me = {
-  firstName: string;
-  id: string;
-  last: string;
+  readonly firstName: string;
+  readonly id: string;
+  readonly last: string;
 };
 
 export type SimpleQuery = {
-  me: SimpleQuery_me | null;
+  readonly me: SimpleQuery_me | null;
 };

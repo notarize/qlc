@@ -1,21 +1,21 @@
 import type { OperatingSystem } from "__generated__/globalTypes";
 
 export type Root_operator_personalHost = {
-  id: string;
-  osFromAbsolute: OperatingSystem;
-  personalHostIdFromRelative: string;
+  readonly id: string;
+  readonly osFromAbsolute: OperatingSystem;
+  readonly personalHostIdFromRelative: string;
 };
 
 export type Root_operator = {
-  email: string;
-  id: string;
-  lastNameFromRelative: string;
+  readonly email: string;
+  readonly id: string;
+  readonly lastNameFromRelative: string;
   /**
    * A user's personal device
    */
-  personalHost: Root_operator_personalHost;
+  readonly personalHost: Root_operator_personalHost;
 };
 
 export type Root = {
-  operator: Root_operator | null;
+  readonly operator: Root_operator | null;
 };

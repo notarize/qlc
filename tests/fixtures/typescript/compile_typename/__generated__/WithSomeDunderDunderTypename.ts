@@ -1,16 +1,16 @@
 export type WithSomeDunderDunderTypename_operator_personalHost = {
-  __typename: "Host";
-  id: string;
+  readonly __typename: "Host";
+  readonly id: string;
 };
 
 export type WithSomeDunderDunderTypename_operator = {
-  as: "User";
+  readonly as: "User";
   /**
    * A user's personal device
    */
-  personalHost: WithSomeDunderDunderTypename_operator_personalHost;
+  readonly personalHost: WithSomeDunderDunderTypename_operator_personalHost;
 };
 
 export type WithSomeDunderDunderTypename = {
-  operator: WithSomeDunderDunderTypename_operator | null;
+  readonly operator: WithSomeDunderDunderTypename_operator | null;
 };
