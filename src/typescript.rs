@@ -97,7 +97,7 @@ fn input_def_from_type(
     let mut sorted = input_type.fields.iter().collect::<Vec<_>>();
     sorted.sort_unstable_by_key(|item| item.0);
     for (name, field) in sorted.into_iter() {
-        let doc = compile_documentation(&field.documentation, 2);
+        let doc = compile_documentation(&field.documentation, field.deprecated, 2);
         let field_type = from_input_def_field_def(config, name, field)?;
         let (_, last_type_mod) = field.type_description.type_modifiers();
         let ts_field = match last_type_mod {
@@ -132,7 +132,7 @@ fn enum_def_from_type(
     documentation: &schema::Documentation,
     enum_type: &schema::EnumType,
 ) -> String {
-    let doc_comment = compile_documentation(documentation, 0);
+    let doc_comment = compile_documentation(documentation, false, 0);
     let values = enum_type
         .possible_values
         .iter()
@@ -234,17 +234,27 @@ pub fn compile_globals(
     })
 }
 
-fn compile_documentation(documentation: &schema::Documentation, tab_width: usize) -> Typescript {
-    documentation
-        .as_ref()
-        .map(|docs| {
-            let tab = " ".repeat(tab_width);
-            let processed_desc = docs
-                .replace('\n', &format!("\n {tab}* "))
-                .replace("*/", EMPTY);
-            format!("/**\n {tab}* {processed_desc}\n {tab}*/\n{tab}")
-        })
-        .unwrap_or_else(|| String::from(EMPTY))
+fn compile_documentation(
+    documentation: &schema::Documentation,
+    deprecated: bool,
+    tab_width: usize,
+) -> Typescript {
+    let tab = " ".repeat(tab_width);
+
+    let processed_documentation = documentation.as_deref().map(|docs| {
+        docs.replace('\n', &format!("\n {tab}* "))
+            .replace("/*", EMPTY)
+            .replace("*/", EMPTY)
+    });
+
+    let wrap = |content: &str| format!("/**\n {tab}* {content}\n {tab}*/\n{tab}");
+
+    match (processed_documentation.as_deref(), deprecated) {
+        (Some(docs), true) => wrap(&format!("{docs}\n {tab}* @deprecated")),
+        (Some(docs), false) => wrap(docs),
+        (None, true) => wrap("@deprecated"),
+        (None, false) => EMPTY.to_string(),
+    }
 }
 
 fn compile_custom_scalar_name(
@@ -414,7 +424,7 @@ fn type_definitions_from_complex_ir<'a>(
             ir::FieldType::TypeName => format!("\"{}\"", complex_ir.name),
         };
         let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);
-        let doc_comment = compile_documentation(&field_ir.documentation, 2);
+        let doc_comment = compile_documentation(&field_ir.documentation, field_ir.deprecated, 2);
         prop_defs.push(format!(
             "  {doc_comment}{}: {prop_def_type};",
             field_ir.prop_name,
