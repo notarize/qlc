@@ -87,6 +87,8 @@ type Network implements Node & Tagged {
   ipv6Cidr: String
   hosts(first: Int, last: Int): HostConnection!
   tags: [ResourceTag!]!
+  hostIdTopology: [[[ID]]]
+  hostIdGroups: [[ID!]!]!
 }
 
 "An OS makes hardware useful"

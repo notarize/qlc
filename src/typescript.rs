@@ -98,8 +98,7 @@ fn input_def_from_type(
     for (name, field) in sorted.into_iter() {
         let doc = compile_documentation(&field.documentation, field.deprecated, 2);
         let field_type = from_input_def_field_def(config, name, field)?;
-        let (_, last_type_mod) = field.type_description.type_modifiers();
-        let ts_field = match last_type_mod {
+        let ts_field = match field.type_description.type_modifiers().last() {
             schema_field::FieldTypeModifier::None => format!("  {doc}{name}: {field_type};"),
             schema_field::FieldTypeModifier::Nullable => {
                 format!("  {doc}{name}?: {field_type} | null;")
@@ -277,20 +276,32 @@ fn type_name_from_scalar(config: &CompileConfig, scalar: &schema_field::ScalarTy
     }
 }
 
-fn prop_type_def(
+fn single_prop_type_def(
     type_modifier: &schema_field::FieldTypeModifier,
-    flat_type_name: String,
-) -> String {
+    inner_type_name: Typescript,
+) -> Typescript {
     match type_modifier {
-        schema_field::FieldTypeModifier::None => flat_type_name,
-        schema_field::FieldTypeModifier::Nullable => format!("{flat_type_name} | null"),
-        schema_field::FieldTypeModifier::List => format!("{flat_type_name}[]"),
-        schema_field::FieldTypeModifier::NullableList => format!("{flat_type_name}[] | null"),
-        schema_field::FieldTypeModifier::ListOfNullable => format!("({flat_type_name} | null)[]"),
+        schema_field::FieldTypeModifier::None => inner_type_name,
+        schema_field::FieldTypeModifier::Nullable => format!("{inner_type_name} | null"),
+        schema_field::FieldTypeModifier::List => format!("{inner_type_name}[]"),
+        schema_field::FieldTypeModifier::NullableList => format!("{inner_type_name}[] | null"),
+        schema_field::FieldTypeModifier::ListOfNullable => format!("({inner_type_name} | null)[]"),
         schema_field::FieldTypeModifier::NullableListOfNullable => {
-            format!("({flat_type_name} | null)[] | null")
+            format!("({inner_type_name} | null)[] | null")
         }
     }
+}
+
+fn prop_type_def<'a>(
+    first_type_modifiers: impl Iterator<Item = &'a schema_field::FieldTypeModifier>,
+    last_type_modifier: &schema_field::FieldTypeModifier,
+    flat_type_name: Typescript,
+) -> Typescript {
+    let mut result = single_prop_type_def(last_type_modifier, flat_type_name);
+    for type_modifier in first_type_modifiers {
+        result = single_prop_type_def(type_modifier, format!("({result})"));
+    }
+    result
 }
 
 fn field_ids_for_complex_ir(complex: &ir::Complex) -> HashSet<&str> {
@@ -423,7 +434,11 @@ fn type_definitions_from_complex_ir<'a>(
             ir::FieldType::Scalar(scalar_type) => type_name_from_scalar(config, scalar_type),
             ir::FieldType::TypeName => format!("\"{}\"", complex_ir.name),
         };
-        let prop_def_type = prop_type_def(&field_ir.last_type_modifier, flat_type_name);
+        let prop_def_type = prop_type_def(
+            field_ir.type_modifiers.rest_modifiers_iter(),
+            field_ir.type_modifiers.last(),
+            flat_type_name,
+        );
         let doc_comment = compile_documentation(&field_ir.documentation, field_ir.deprecated, 2);
         let readonly_modifier = if config.use_readonly_types {
             "readonly "
@@ -484,7 +499,8 @@ fn compile_variables_type_definition<'a>(
                 .map(|var_ir| {
                     let type_name =
                         compile_variable_type_name(config, schema, global_types, var_ir)?;
-                    let type_def = prop_type_def(&var_ir.type_modifier, type_name);
+                    let type_def =
+                        prop_type_def(std::iter::empty(), &var_ir.type_modifier, type_name);
                     Ok((var_ir, type_def))
                 })
                 .collect::<Result<Vec<(&variable::Variable<'a>, String)>>>()

@@ -73,6 +73,7 @@ pub struct ConcreteFieldType {
     pub definition: FieldTypeDefinition,
 }
 
+#[derive(Debug)]
 struct ModifierBuilder {
     concrete: FieldTypeModifier,
     higher_order_modifiers: Vec<FieldTypeModifier>,
@@ -104,11 +105,48 @@ impl ModifierBuilder {
         self.concrete = match &self.concrete {
             FieldTypeModifier::Nullable => FieldTypeModifier::NullableListOfNullable,
             FieldTypeModifier::None => FieldTypeModifier::ListOfNullable,
+            FieldTypeModifier::List => {
+                self.higher_order_modifiers.push(FieldTypeModifier::List);
+                FieldTypeModifier::ListOfNullable
+            }
+            FieldTypeModifier::ListOfNullable => {
+                self.higher_order_modifiers
+                    .push(FieldTypeModifier::ListOfNullable);
+                FieldTypeModifier::NullableListOfNullable
+            }
+            FieldTypeModifier::NullableListOfNullable => {
+                self.higher_order_modifiers
+                    .push(FieldTypeModifier::NullableListOfNullable);
+                FieldTypeModifier::NullableListOfNullable
+            }
             old_concrete => {
                 self.higher_order_modifiers.push(old_concrete.clone());
                 FieldTypeModifier::new()
             }
         };
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldTypeModifiers {
+    last: FieldTypeModifier,
+    rest: Vec<FieldTypeModifier>,
+}
+
+impl FieldTypeModifiers {
+    fn from_field_type(field_type: &FieldType) -> Self {
+        FieldTypeModifiers {
+            last: field_type.concrete.modifier.clone(),
+            rest: field_type.higher_order_modifiers.clone(),
+        }
+    }
+
+    pub fn last(&self) -> &FieldTypeModifier {
+        &self.last
+    }
+
+    pub fn rest_modifiers_iter(&self) -> impl Iterator<Item = &'_ FieldTypeModifier> {
+        self.rest.iter()
     }
 }
 
@@ -131,17 +169,16 @@ impl FieldType {
         }
     }
 
-    pub fn type_modifiers(&self) -> (impl Iterator<Item = &FieldTypeModifier>, &FieldTypeModifier) {
-        // TODO we do not support higher order type modifiers in output
-        (self.higher_order_modifiers.iter(), &self.concrete.modifier)
-    }
-
     pub fn reveal_concrete(&self) -> &ConcreteFieldType {
         &self.concrete
     }
 
     pub fn is_complex(&self) -> bool {
         self.concrete.definition.is_complex()
+    }
+
+    pub fn type_modifiers(&self) -> FieldTypeModifiers {
+        FieldTypeModifiers::from_field_type(self)
     }
 }
 
@@ -180,7 +217,7 @@ impl TryFrom<json::FieldType> for FieldType {
                 }
             };
             let ModifierBuilder {
-                higher_order_modifiers,
+                mut higher_order_modifiers,
                 concrete,
             } = modifier_builder;
             let real_field_type = ConcreteFieldType {
@@ -188,6 +225,7 @@ impl TryFrom<json::FieldType> for FieldType {
                 name,
                 modifier: concrete,
             };
+            higher_order_modifiers.reverse();
             return Ok(FieldType {
                 concrete: real_field_type,
                 higher_order_modifiers,

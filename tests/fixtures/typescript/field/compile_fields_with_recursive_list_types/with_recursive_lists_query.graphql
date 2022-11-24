@@ -1,0 +1,9 @@
+query WithRecursiveListFields {
+  network(id: "networkWithTopology") {
+    id
+    # A list of lists
+    hostIdGroups
+    # A list of list of lists of nulls :)
+    hostIdTopology
+  }
+}

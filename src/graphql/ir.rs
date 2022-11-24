@@ -275,7 +275,7 @@ impl<'a> TryFrom<UniqueFields<'a>> for Vec<Field> {
                     prop_name: alias.to_string(),
                     documentation: field.documentation.clone(),
                     deprecated: field.deprecated,
-                    last_type_modifier: field.type_description.type_modifiers().1.clone(),
+                    type_modifiers: field.type_description.type_modifiers(),
                     type_ir: get_type_ir_for_field(field, concrete, sub_traversal)?,
                 })
             })
@@ -462,7 +462,7 @@ pub struct Field {
     pub prop_name: String,
     pub documentation: schema::Documentation,
     pub deprecated: bool,
-    pub last_type_modifier: schema_field::FieldTypeModifier,
+    pub type_modifiers: schema_field::FieldTypeModifiers,
     pub type_ir: FieldType,
 }
 
