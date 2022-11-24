@@ -437,63 +437,79 @@ fn type_definitions_from_complex_ir<'a>(
     Ok(definitions)
 }
 
-fn compile_variables_type_definition(
+fn compile_variable_type_name<'a>(
     config: &CompileConfig,
     schema: &schema::Schema,
     global_types: &mut HashSet<String>,
-    op_ir: &ir::Operation<'_>,
+    var_ir: &variable::Variable<'a>,
 ) -> Result<Typescript> {
-    match op_ir.variables {
-        None => Ok(EMPTY.to_string()),
-        Some(ref var_irs) => {
-            let prop_defs: Result<Vec<_>> = var_irs
+    let type_name = match var_ir.type_ir {
+        variable::VariableType::Id | variable::VariableType::String => "string".to_string(),
+        variable::VariableType::Float | variable::VariableType::Int => "number".to_string(),
+        variable::VariableType::Boolean => "boolean".to_string(),
+        variable::VariableType::Custom(name) => {
+            let global_type = schema
+                .get_type_for_name(name)
+                .ok_or_else(|| Error::MissingType(name.to_string()))?;
+            match &global_type.definition {
+                schema::TypeDefinition::Scalar(_) => compile_custom_scalar_name(config, name),
+
+                _ => {
+                    global_types.insert((*name).to_string());
+                    name.to_string()
+                }
+            }
+        }
+    };
+    Ok(type_name)
+}
+
+fn compile_variables_type_definition<'a>(
+    config: &CompileConfig,
+    schema: &schema::Schema,
+    global_types: &mut HashSet<String>,
+    op_ir: &ir::Operation<'a>,
+) -> Result<Typescript> {
+    op_ir
+        .variables
+        .as_ref()
+        .map(|var_irs| {
+            var_irs
                 .iter()
                 .map(|var_ir| {
-                    let type_name = match &var_ir.type_ir {
-                        variable::VariableType::Id | variable::VariableType::String => {
-                            "string".to_string()
-                        }
-                        variable::VariableType::Float | variable::VariableType::Int => {
-                            "number".to_string()
-                        }
-                        variable::VariableType::Boolean => "boolean".to_string(),
-                        variable::VariableType::Custom(name) => {
-                            let global_type = schema
-                                .get_type_for_name(name)
-                                .ok_or_else(|| Error::MissingType(name.to_string()))?;
-                            match &global_type.definition {
-                                schema::TypeDefinition::Scalar(_) => {
-                                    compile_custom_scalar_name(config, name)
-                                }
-
-                                _ => {
-                                    global_types.insert((*name).to_string());
-                                    name.to_string()
-                                }
-                            }
-                        }
-                    };
+                    let type_name =
+                        compile_variable_type_name(config, schema, global_types, var_ir)?;
                     let type_def = prop_type_def(&var_ir.type_modifier, type_name);
-                    let compiled = match &var_ir.type_modifier {
-                        schema_field::FieldTypeModifier::Nullable
-                        | schema_field::FieldTypeModifier::NullableList
-                        | schema_field::FieldTypeModifier::NullableListOfNullable => {
-                            format!("  {}?: {type_def};", var_ir.prop_name)
-                        }
-                        _ => format!("  {}: {type_def};", var_ir.prop_name),
-                    };
-                    Ok(compiled)
+                    Ok((var_ir, type_def))
                 })
-                .collect();
-            prop_defs.map(|prop_defs| {
-                format!(
-                    "\n\nexport type {}Variables = {{\n{}\n}};",
-                    op_ir.name,
-                    prop_defs.join("\n")
-                )
-            })
-        }
-    }
+                .collect::<Result<Vec<(&variable::Variable<'a>, String)>>>()
+                .map(|mut values| {
+                    values.sort_unstable_by_key(|(var_ir, _type_def)| &var_ir.prop_name);
+                    values
+                        .into_iter()
+                        .map(|(var_ir, type_def)| match &var_ir.type_modifier {
+                            schema_field::FieldTypeModifier::Nullable
+                            | schema_field::FieldTypeModifier::NullableList
+                            | schema_field::FieldTypeModifier::NullableListOfNullable => {
+                                format!("  {}?: {type_def};", var_ir.prop_name)
+                            }
+                            _ => format!("  {}: {type_def};", var_ir.prop_name),
+                        })
+                        .collect::<Vec<String>>()
+                        .join("\n")
+                })
+        })
+        .transpose()
+        .map(|result| {
+            result
+                .map(|prop_defs| {
+                    format!(
+                        "\n\nexport type {}Variables = {{\n{}\n}};",
+                        op_ir.name, prop_defs
+                    )
+                })
+                .unwrap_or_else(|| EMPTY.to_string())
+        })
 }
 
 fn compile_imports(config: &CompileConfig, used_globals: &HashSet<String>) -> Typescript {
