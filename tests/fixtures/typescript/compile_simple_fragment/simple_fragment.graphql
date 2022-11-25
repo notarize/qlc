@@ -1,0 +1,8 @@
+fragment SimpleFragment on User {
+  id
+  email
+  manager {
+    id
+    firstName
+  }
+}

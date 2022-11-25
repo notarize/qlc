@@ -1,0 +1,8 @@
+query WithGlobals {
+  operator {
+    personalHost {
+      id
+      operatingSystem
+    }
+  }
+}

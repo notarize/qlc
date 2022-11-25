@@ -1,0 +1,12 @@
+#import "./host_fragment.graphql"
+
+query Narrowing {
+  operator {
+    id
+    ...SpreadOnHost
+    ... on Network {
+      id
+      cidr
+    }
+  }
+}

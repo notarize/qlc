@@ -1,0 +1,6 @@
+query SimpleGetNetwork($networkId: ID!) {
+  network(id: $networkId) {
+    id
+    cidr
+  }
+}

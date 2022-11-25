@@ -1,0 +1,4 @@
+fragment UserDeep on User {
+  idDeep: id
+  lastName
+}

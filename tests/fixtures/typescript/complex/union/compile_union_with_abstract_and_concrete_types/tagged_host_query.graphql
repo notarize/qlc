@@ -1,0 +1,17 @@
+query GetTagsForHost {
+  host(id: "taggedHost") {
+    id
+    tags {
+      __typename
+
+      ... on Tag {
+        timeToLiveMs
+      }
+
+      ... on BooleanTag {
+        name
+        not
+      }
+    }
+  }
+}

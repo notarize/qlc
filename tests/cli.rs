@@ -1,184 +1,145 @@
-use crate::helpers::{
-    contains_graphql_filename, contains_read_error, qlc_command_with_fake_dir,
-    qlc_command_with_fake_dir_and_schema,
+use crate::helpers::cmd::TestCommandHarness;
+use crate::helpers::stdout_predicates::{
+    contains_graphql_file_error_without_location, contains_no_such_file_error,
 };
-use assert_cmd::prelude::*;
-use assert_fs::prelude::*;
-use assert_fs::TempDir;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::{contains, is_empty};
-use std::process::Command;
 
-fn qlc_command_with_config_file(config_file_contents: &str) -> (Command, TempDir) {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    let qlcrc = temp_dir.child(".qlcrc.json");
-    qlcrc.write_str(config_file_contents).unwrap();
-    cmd.arg("-c").arg(qlcrc.path());
-    (cmd, temp_dir)
+#[test]
+fn run_with_empty_dir() {
+    TestCommandHarness::default().run_for_success();
 }
 
 #[test]
-fn compile_without_schema_file() {
-    let (mut cmd, _) = qlc_command_with_fake_dir();
-    cmd.assert().failure();
+fn run_without_schema_file() {
+    TestCommandHarness::new()
+        .run_for_failure()
+        .stdout(contains("/schema.json`: No such file or directory"));
 }
 
 #[test]
 fn compile_with_importing_query_instead_of_fragment() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("file.graphql")
-        .write_str(
-            r#"#import "./other_query.graphql"
-query OperationName { node { id } }
-"#,
-        )
-        .unwrap();
-    temp_dir
-        .child("other_query.graphql")
-        .write_str("query OtherQuery { node { id } }")
-        .unwrap();
+    let mut harness = TestCommandHarness::default();
+
     let assertion = contains(
         "= help: This document is not a fragment, and importing it is probably a mistake.",
     )
-    .and(contains("#import \"./other_query.graphql\"\n  |         ^"))
-    .and(contains_graphql_filename(&temp_dir, "file.graphql", None));
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
+    .and(contains(
+        "#import \"./imported_query.graphql\"\n  |         ^",
+    ))
+    .and(contains_graphql_file_error_without_location(
+        harness.directory_path().join("main_query.graphql"),
+    ));
+
+    harness
+        .with_fixture_directory("cli/compile_with_importing_query_instead_of_fragment")
+        .run_for_failure()
+        .stdout(assertion);
 }
 
 #[test]
 fn compile_with_missing_fragment() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("file.graphql")
-        .write_str(
-            r#"#import "./not_here.graphql"
-query OperationName { node { id } }
-"#,
-        )
-        .unwrap();
-    let assertion = contains_read_error(
-        &temp_dir,
-        "./not_here.graphql",
-        "No such file or directory (os error 2)",
-    )
-    .and(contains("#import \"./not_here.graphql\"\n  |         ^"))
-    .and(contains_graphql_filename(&temp_dir, "file.graphql", None));
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
-}
-
-#[test]
-fn compile_with_unparseable_graphql() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("file.graphql")
-        .write_str("query Name {{ thing }")
-        .unwrap();
-    let assertion = contains("Parse error at 1:13").and(contains_graphql_filename(
-        &temp_dir,
-        "file.graphql",
-        None,
-    ));
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
-}
-
-#[test]
-fn compile_with_narrowing() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("meeting_fragment.graphql")
-        .write_str("fragment externalSpreadOnMeeting on Meeting { id }")
-        .unwrap();
-    temp_dir
-        .child("file.graphql")
-        .write_str(
-            r#"
-#import "./meeting_fragment.graphql"
-query Narrowing {
-  viewer {
-    id
-    ...externalSpreadOnMeeting
-    ... on User {
-      id
-    }
-  }
-}
-"#,
-        )
-        .unwrap();
-    let assertion_external = contains("= help: The parent types of this spread are limited to `Viewer`, making spreading `Meeting` uneeded.")
-      .and(contains("6 |     ...externalSpreadOnMeeting\n  |        ^"))
-      .and(contains_graphql_filename(
-            &temp_dir,
-            "file.graphql",
-            Some((6, 8)),
+    let mut harness = TestCommandHarness::default();
+    let dir_path = harness.directory_path();
+    let assertion = contains_no_such_file_error(dir_path.join("./not_here.graphql"))
+        .and(contains("#import \"./not_here.graphql\"\n  |         ^"))
+        .and(contains_graphql_file_error_without_location(
+            dir_path.join("importing_missing_query.graphql"),
         ));
-    let assertion_inline = contains("= help: The parent types of this spread are limited to `Viewer`, making spreading `User` uneeded.")
-      .and(contains("7 |     ... on User {\n  |         ^"))
-      .and(contains_graphql_filename(
-            &temp_dir,
-            "file.graphql",
-            Some((7, 9)),
+    harness
+        .with_fixture_directory("cli/compile_with_missing_fragment")
+        .run_for_failure()
+        .stdout(assertion);
+}
+
+#[test]
+fn run_with_unparseable_graphql() {
+    let mut harness = TestCommandHarness::default();
+
+    let assertion =
+        contains("Parse error at 2:19").and(contains_graphql_file_error_without_location(
+            harness.directory_path().join("unparseable.graphql"),
         ));
-    cmd.assert()
-        .success()
-        .stdout(assertion_inline.and(assertion_external))
-        .stderr(is_empty());
+
+    harness
+        .with_fixture_directory("cli/run_with_unparseable_graphql")
+        .run_for_failure()
+        .stdout(assertion);
 }
 
 #[test]
-fn compile_with_non_schema_matching_graphql() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("file.graphql")
-        .write_str(
-            r#"query QueryOperation {
-  doesNotExist
-  alsoIsNot: nonExist
-}"#,
-        )
-        .unwrap();
-    let assertion = contains("= help: Check the fields of `Query`.")
-        .and(contains("2 |   doesNotExist\n  |   ^"))
-        .and(contains("3 |   alsoIsNot: nonExist\n  |   ^"))
-        .and(contains_graphql_filename(
-            &temp_dir,
-            "file.graphql",
-            Some((3, 3)),
-        ))
-        .and(contains_graphql_filename(
-            &temp_dir,
-            "file.graphql",
-            Some((2, 3)),
+fn run_with_broken_config_file() {
+    TestCommandHarness::default()
+        .with_default_rc_file_contents("{ \"notValidJson: true }")
+        .run_for_failure()
+        .stdout(contains("program error: error in config file").and(contains(".qlcrc.json`")));
+}
+
+#[test]
+fn run_with_config_file_missing_schema() {
+    let mut harness = TestCommandHarness::default();
+
+    let assertion =
+        contains_no_such_file_error(harness.directory_path().join("not_default_schema.json"));
+
+    harness
+        .with_default_rc_file_contents("{ \"schemaFile\": \"not_default_schema.json\" }")
+        .run_for_failure()
+        .stdout(assertion);
+}
+
+#[test]
+fn run_with_invalid_config_file_schema_and_valid_cli_override() {
+    let mut harness = TestCommandHarness::default();
+    let schema_file_path = harness.directory_path().join("schema.json");
+    harness
+        // put an invalid schema file in config file
+        .with_default_rc_file_contents("{ \"schemaFile\": \"not_default_schema.json\" }")
+        // but override with valid cli arg
+        .with_arg("-s")
+        .with_arg(schema_file_path)
+        .run_for_success()
+        .stdout(is_empty());
+}
+
+#[test]
+fn run_with_invalid_cli_schema_arg() {
+    let missing_schema_path = "not_a_real_file.json";
+    TestCommandHarness::default()
+        .with_arg("-s")
+        .with_arg(missing_schema_path)
+        .run_for_failure()
+        .stdout(contains_no_such_file_error(missing_schema_path));
+}
+
+#[test]
+fn run_with_invalid_schema_json_syntax() {
+    TestCommandHarness::new()
+        .with_default_schema_file_from_contents("{ \"notvalidJs: true ")
+        .run_for_failure()
+        .stdout(contains(
+            "error: malformed schema: JSON parse error: EOF while parsing",
         ));
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
 }
 
 #[test]
-fn compile_with_broken_config_file() {
-    let (mut cmd, temp_dir) = qlc_command_with_config_file(r#"{ invalidJSON }"#);
-    let assertion = contains("program error: error in config file").and(contains(".qlcrc.json`"));
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
-    drop(temp_dir);
+fn run_with_wrong_shape_schema_json() {
+    TestCommandHarness::new()
+        // syntatically valid json but malformed shape
+        .with_default_schema_file_from_contents("{ \"unexpected\": 3 }")
+        .run_for_failure()
+        .stdout(contains(
+            "error: malformed schema: JSON parse error: missing field `data` at line 1",
+        ));
 }
 
 #[test]
-fn compile_with_config_file() {
-    let (mut cmd, temp_dir) =
-        qlc_command_with_config_file(r#"{ "schemaFile": "not_schema.json" }"#);
-    let assertion = contains_read_error(
-        &temp_dir,
-        "not_schema.json",
-        "No such file or directory (os error 2)",
-    );
-    cmd.assert().failure().stdout(assertion).stderr(is_empty());
-}
-
-#[test]
-fn compile_with_config_file_and_cli_override() {
-    let (mut cmd, temp_dir) =
-        qlc_command_with_config_file(r#"{ "schemaFile": "not_schema.json" }"#);
-    let schema_json = temp_dir.child("schema.json");
-    cmd.arg("-s").arg(schema_json.path());
-    cmd.assert().success().stdout(is_empty()).stderr(is_empty());
+fn compile_with_use_show_deprecation_warnings() {
+    let assertion = contains("warning: use of deprecated field `publicRSAKey` on type `User`")
+        .and(contains("4 |     publicRSAKey\n  |     ^"));
+    TestCommandHarness::default()
+        .with_fixture_directory("cli/compile_with_use_show_deprecation_warnings")
+        .with_arg("--show-deprecation-warnings")
+        .run_for_success()
+        .stdout(assertion);
 }

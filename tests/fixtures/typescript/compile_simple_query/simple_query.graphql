@@ -1,0 +1,7 @@
+query SimpleQuery {
+  me: operator {
+    id
+    firstName
+    last: lastName
+  }
+}

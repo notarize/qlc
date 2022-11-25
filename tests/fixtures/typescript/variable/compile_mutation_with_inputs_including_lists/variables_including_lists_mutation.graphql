@@ -1,0 +1,10 @@
+mutation AddHostToManyNetworks($input: AttachHostToNetworksInput!) {
+  attachHostToNetworks(input: $input) {
+    host {
+      id
+      networks {
+        id
+      }
+    }
+  }
+}

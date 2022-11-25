@@ -1,0 +1,6 @@
+fragment LowerCheck on User {
+  id
+  personalHost {
+    operatingSystem
+  }
+}

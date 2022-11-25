@@ -1,0 +1,10 @@
+{
+  "name": "qlc-schema-definition",
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p output && node ./generate.mjs"
+  },
+  "dependencies": {
+    "graphql": "^16.6.0"
+  }
+}

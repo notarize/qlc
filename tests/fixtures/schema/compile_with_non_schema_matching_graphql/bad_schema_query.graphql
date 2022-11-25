@@ -1,0 +1,4 @@
+query GarbageSchmea {
+  doesNotExist
+  alsoIsNot: nonExistent
+}

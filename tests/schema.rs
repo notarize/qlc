@@ -1,88 +1,51 @@
-use super::helpers::{
-    contains_read_error, qlc_command_with_fake_dir, qlc_command_with_fake_dir_and_schema,
-};
-use assert_cmd::prelude::*;
-use assert_fs::prelude::*;
-use predicates::str::{contains, is_empty};
+use crate::helpers::cmd::TestCommandHarness;
+use crate::helpers::stdout_predicates::contains_graphql_file_error_with_location;
+use predicates::prelude::PredicateBooleanExt;
+use predicates::str::contains;
 
 #[test]
-fn schema_file_does_not_exist() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir();
-    cmd.assert()
-        .stderr(is_empty())
-        .stdout(contains_read_error(
-            &temp_dir,
-            "schema.json",
-            "No such file or directory (os error 2)",
+fn compile_with_non_schema_matching_graphql() {
+    let mut harness = TestCommandHarness::default();
+    let bad_query_path = harness.directory_path().join("bad_schema_query.graphql");
+
+    let assertion = contains("= help: Check the fields of `Query`.")
+        .and(contains("2 |   doesNotExist\n  |   ^"))
+        .and(contains("3 |   alsoIsNot: nonExistent\n  |   ^"))
+        .and(contains_graphql_file_error_with_location(
+            &bad_query_path,
+            (3, 3),
         ))
-        .failure();
+        .and(contains_graphql_file_error_with_location(
+            &bad_query_path,
+            (2, 3),
+        ));
+
+    harness
+        .with_fixture_directory("schema/compile_with_non_schema_matching_graphql")
+        .run_for_failure()
+        .stdout(assertion);
 }
 
 #[test]
-fn schema_file_does_not_exist_with_flag() {
-    qlc_command_with_fake_dir()
-        .0
-        .arg("-s")
-        .arg("not-a-real-file.json")
-        .assert()
-        .stdout(contains(
-            "error: could not read `not-a-real-file.json`: No such file or directory (os error 2)",
-        ))
-        .stderr(is_empty())
-        .failure();
-}
+fn compile_with_narrowing() {
+    let mut harness = TestCommandHarness::default();
+    let narrowing_query_path = harness.directory_path().join("narrow_query.graphql");
 
-#[test]
-fn schema_file_invalid_json_syntax() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir();
-    let bad_syntax_file = temp_dir.child("schema.json");
-    bad_syntax_file.write_str("t").unwrap();
-    cmd.arg("-s")
-        .arg(bad_syntax_file.path())
-        .assert()
-        .stdout(contains("error: malformed schema: JSON parse error: EOF while parsing a value at line 1 column 1"))
-        .stderr(is_empty())
-        .failure();
-}
+    let assertion_external = contains("= help: The parent types of this spread are limited to `User`, making spreading `Host` uneeded.")
+      .and(contains("6 |     ...SpreadOnHost\n  |        ^"))
+      .and(contains_graphql_file_error_with_location(
+            &narrowing_query_path,
+            (6, 8),
+        ));
+    let assertion_inline = contains("= help: The parent types of this spread are limited to `User`, making spreading `Network` uneeded.")
+      .and(contains("7 |     ... on Network {\n  |         ^"))
+      .and(contains_graphql_file_error_with_location(
+            &narrowing_query_path,
+            (7, 9),
+        ));
 
-#[test]
-fn schema_file_invalid_schema_json() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir();
-    let unexpected_json_file = temp_dir.child("schema.json");
-    unexpected_json_file
-        .write_str("{\"unexpected\": 3}")
-        .unwrap();
-    cmd.arg("-s")
-        .arg(unexpected_json_file.path())
-        .assert()
-        .stdout(contains(
-            "error: malformed schema: JSON parse error: missing field `data` at line 1 column 17",
-        ))
-        .stderr(is_empty())
-        .failure();
-}
-
-#[test]
-fn use_of_deprecated_fields() {
-    let (mut cmd, temp_dir) = qlc_command_with_fake_dir_and_schema();
-    temp_dir
-        .child("deprecated.graphql")
-        .write_str(
-            r#"
-query Deprecated($id: ID!) {
-  node(id: $id) {
-    ... on Organization {
-      features
-    }
-  }
-}"#,
-        )
-        .unwrap();
-    cmd.arg("--show-deprecation-warnings")
-        .assert()
-        .stdout(contains(
-            "warning: use of deprecated field `features` on type `Organization`",
-        ))
-        .stderr(is_empty())
-        .success();
+    harness
+        .with_fixture_directory("cli/compile_with_narrowing")
+        .run_for_success()
+        .stdout(assertion_inline.and(assertion_external));
 }

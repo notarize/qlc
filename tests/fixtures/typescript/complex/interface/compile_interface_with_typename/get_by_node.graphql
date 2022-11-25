@@ -1,0 +1,14 @@
+query GetByNodeWithInterface {
+  network123: node(id: "network123") {
+    __typename
+    as: __typename
+    ... on Network {
+      __typename
+      another: __typename
+      cidr
+      hosts {
+        totalCount
+      }
+    }
+  }
+}

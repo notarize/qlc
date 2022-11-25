@@ -1,0 +1,7 @@
+mutation SimpleProvision($input: ProvisionHostInput!) {
+  provisionHost(input: $input) {
+    host {
+      id
+    }
+  }
+}

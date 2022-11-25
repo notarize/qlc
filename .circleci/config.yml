@@ -29,10 +29,25 @@ executors:
 
   node_env:
     docker:
-      - image: notarize/node-ci:12.16.1
+      - image: notarize/node-ci:18.12.0
     working_directory: /root/notarize/qlc
 
 jobs:
+  test_schema_init:
+    executor: node_env
+    steps:
+      - checkout
+      - run:
+          name: Build Schema
+          command: |
+            cd tests/fixtures/schema_generation
+            yarn install --frozen-lockfile
+            yarn run build
+      - persist_to_workspace:
+          root: /root/notarize
+          paths:
+            - qlc/tests/fixtures/schema_generation/output
+
   cargo_init:
     executor: default_rust_compiler
     steps:
@@ -174,9 +189,15 @@ workflows:
             branches:
               ignore: main
 
+      - test_schema_init:
+          filters:
+            branches:
+              ignore: main
+
       - test:
           requires:
             - cargo_init
+            - test_schema_init
           filters:
             branches:
               ignore: main

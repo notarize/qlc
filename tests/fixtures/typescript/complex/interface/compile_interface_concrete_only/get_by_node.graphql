@@ -1,0 +1,8 @@
+query GetByNodeConcreteOnly {
+  desiredUser: node(id: "user965") {
+    ... on User {
+      email
+      firstName
+    }
+  }
+}

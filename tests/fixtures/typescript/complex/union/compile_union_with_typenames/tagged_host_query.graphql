@@ -1,0 +1,17 @@
+query GetTagTypeNamesForHost {
+  host(id: "taggedHost") {
+    tags {
+      __typename
+      as: __typename
+
+      ... on JSONTag {
+        typername: __typename
+        content
+      }
+
+      ... on BooleanTag {
+        name
+      }
+    }
+  }
+}

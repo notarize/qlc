@@ -1,0 +1,20 @@
+query GetTagsForNetwork {
+  network(id: "taggedNetwork") {
+    id
+    tags {
+      __typename
+      ... on Tag {
+        timeToLiveMs
+        author {
+          __typename
+          id
+          tags {
+            ... on Tag {
+              timeToLiveMs
+            }
+          }
+        }
+      }
+    }
+  }
+}

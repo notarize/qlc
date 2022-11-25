@@ -1,0 +1,7 @@
+subscription SimpleSubscription {
+  me: operator {
+    id
+    firstName
+    last: lastName
+  }
+}
