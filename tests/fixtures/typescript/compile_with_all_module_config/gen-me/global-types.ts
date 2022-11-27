@@ -3,6 +3,6 @@
  */
 export enum OperatingSystem {
   ARCH_LINUX = "ARCH_LINUX",
-  UBUNTU_LINUX = "UBUNTU_LINUX",
   FREEBSD = "FREEBSD",
+  UBUNTU_LINUX = "UBUNTU_LINUX",
 }

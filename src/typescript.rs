@@ -132,13 +132,14 @@ fn enum_def_from_type(
     enum_type: &schema::EnumType,
 ) -> String {
     let doc_comment = compile_documentation(documentation, false, 0);
-    let values = enum_type
+    let mut sorted_values = enum_type
         .possible_values
         .iter()
         .map(|value| format!("  {value} = \"{value}\","))
-        .collect::<Vec<String>>()
-        .join("\n");
-    format!("{doc_comment}export enum {name} {{\n{values}\n}}")
+        .collect::<Vec<String>>();
+    sorted_values.sort_unstable();
+    let joined = sorted_values.join("\n");
+    format!("{doc_comment}export enum {name} {{\n{joined}\n}}")
 }
 
 fn add_sub_input_objects<'a>(
