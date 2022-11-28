@@ -56,7 +56,7 @@ You can download _some_ prebuilt binaries on the
 For convenience, it is also available as an NPM package that supports x64/aarch64 MacOS and x64 linux:
 
 ```sh
-$ yarn add @notarize/qlc-cli
+yarn add @notarize/qlc-cli
 ```
 
 `qlc` will recursively scan directories, finding `.graphql` files and produce `.ts` files in the same
@@ -75,13 +75,13 @@ information. For simplicity, the NPM package comes with a helper script that sho
 
 ```sh
 # Download a schema JSON from an endpoint and write to my_schema.json
-$ yarn run qlc-download-schema https://<FQDN>/graphql my_schema.json
+yarn run qlc-download-schema https://<FQDN>/graphql my_schema.json
 
 # Run qlc searching the src/ directory with schema JSON located at my_schema.json
-$ yarn run qlc -s my_schema.json src
+yarn run qlc -s my_schema.json src
 
 # There are some other options available for more complex requirements.
-$ yarn run qlc --help
+yarn run qlc --help
 ```
 
 Many of the options can also be configured through a camelcased JSON file (by default `.qlcrc.json`). For example:
@@ -100,3 +100,44 @@ The directory in question has 4523 files and 534 `.graphql` files.
 | ------- | ------- | ------------- | ---------------- |
 | `qlc` | 0.6.0 | 118.8 ms ± 10.8 ms | 1 (itself) |
 | `apollo client:codegen --target=typescript` | 2.31.1 (node 14.15.0) | 4.817 s ± 0.475 s | 355 |
+
+### Development
+
+Development, compiling, testing, etc require a relatively recent version of `rustc` and `cargo`. `node` and `yarn`
+are used for some tasks, like packaging the NPM release (see `pkg/npm`), as well as creating a mock schema JSON
+for usage with `cargo test`.
+
+Here are a number of reminders for useful commands, most of which also are executed in CI:
+
+```sh
+# Formatting
+cargo fmt --all
+
+# Linting
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Testing
+## Test Setup, turning tests/fixtures/schema_generation/schema.graphl into a
+## usable tests/fixtures/schema_generation/output/schema.json
+yarn --cwd tests/fixtures/schema_generation install --frozen-lockfile
+yarn --cwd tests/fixtures/schema_generation run build
+
+## Run all tests
+cargo test
+
+## Run matching test
+cargo test union_with_typename
+
+## Instruct cargo test not to capture stdout/stderr so that one can see `dbg!()` output, etc.
+cargo test -- --nocapture
+
+## Instruct the test harness not to delete temporary directories created during testing for debugging
+KEEP_TEST_TEMPDIRS=t cargo test
+
+## Instruct the test harness overwrite expected fixtures with actual output -- useful for large swath compiler output changes
+## Warning: will change repo files on disk
+OVERWRITE_FIXTURES=t cargo test
+
+# Benchmarking on a `src` directory
+hyperfine --warmup 2 -p 'find src -name __generated__ -type d -prune ! -path src/__generated__ -exec rm -r {} +' '../qlc/target/release/qlc src'
+```

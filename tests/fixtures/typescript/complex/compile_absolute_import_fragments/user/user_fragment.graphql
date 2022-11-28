@@ -1,0 +1,11 @@
+#import "host/personal_host_fragment.graphql"
+#import "./sub_user_fragment.graphql"
+
+fragment RelativeFragmentUser on User {
+  lastNameFromRelative: lastName
+  personalHost {
+    personalHostIdFromRelative: id
+    ...AbsoluteFragmentHost
+  }
+  ...SubUser
+}

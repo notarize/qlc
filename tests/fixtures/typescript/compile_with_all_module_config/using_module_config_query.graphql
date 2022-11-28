@@ -1,0 +1,13 @@
+#import "./lower/low_fragment.graphql"
+#import "~/root_fragment.graphql"
+
+query UsingModuleConfig {
+  operator {
+    id
+    personalHost {
+      id
+      ...RootCheck
+    }
+    ...LowerCheck
+  }
+}

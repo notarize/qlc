@@ -1,0 +1,152 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  operator: User
+  host(id: ID!): Host
+  network(id: ID!): Network
+  node(id: ID!): Node
+}
+
+type Mutation {
+  decommissionHost(id: ID!): Boolean!
+  "Null return means it failed"
+  provisionHost(input: ProvisionHostInput!): ProvisionHostPayload
+  attachHostToNetworks(input: AttachHostToNetworksInput!): AttachHostToNetworksPayload!
+}
+
+scalar ISO8601 @specifiedBy(url: "https://datatracker.ietf.org/doc/html/rfc3339")
+scalar JSON @specifiedBy(url: "https://datatracker.ietf.org/doc/html/rfc7159")
+
+"Lookup-able thing"
+interface Node {
+  id: ID!
+}
+
+type User implements Node & Tagged {
+  id: ID!
+  email: String!
+  firstName: String!
+  lastName: String!
+  publicRSAKey: String! @deprecated(reason: "Use publicKey instead")
+  publicKey: PublicKey
+  "A user's manager, if they have one"
+  manager: User
+  "A user's personal device"
+  personalHost: Host!
+  "User's last time logging in"
+  lastLogin: ISO8601 @deprecated(reason: "Use activity.login instead")
+  "User's activity timestamps"
+  activity: UserActivity!
+  tags: [ResourceTag!]!
+}
+
+type PublicKey {
+  kind: CryptoSigningAlgorithim!
+  bitSize: Int!
+  value: String!
+}
+
+type UserActivity {
+  "User's last time successfully authenticating"
+  login: ISO8601
+  logout: ISO8601
+  read: ISO8601
+  write: ISO8601
+}
+
+enum CryptoSigningAlgorithim {
+  RSA
+  DSA
+  ECDSA
+  ED25519
+}
+
+type Host implements Node & Tagged {
+  id: ID!
+  operatingSystem: OperatingSystem!
+  numCpus: Int!
+  networks: [Network!]!
+  tags: [ResourceTag!]!
+}
+
+type HostConnection {
+  totalCount: Int!
+  edges: [HostEdge!]!
+}
+
+type HostEdge {
+  node: Host!
+}
+
+type Network implements Node & Tagged {
+  id: ID!
+  cidr: String!
+  ipv6Cidr: String
+  hosts(first: Int, last: Int): HostConnection!
+  tags: [ResourceTag!]!
+}
+
+"An OS makes hardware useful"
+enum OperatingSystem {
+  ARCH_LINUX
+  UBUNTU_LINUX
+  FREEBSD
+}
+
+input ProvisionHostInput {
+  os: OperatingSystem!
+}
+
+type ProvisionHostPayload {
+  host: Host!
+}
+
+input AttachHostToNetworksInput {
+  "ID of host to attach"
+  hostId: ID!
+  "IDs of networks to attach to"
+  networkIds: [ID!]!
+}
+
+type AttachHostToNetworksPayload {
+  host: Host!
+}
+
+interface Tag {
+  author: User!
+  timeToLiveMs: Int!
+  queryable: Boolean!
+}
+
+interface Tagged {
+  tags: [ResourceTag!]!
+}
+
+union ResourceTag = KeyValueTag | BooleanTag | JSONTag
+
+type KeyValueTag implements Tag {
+  author: User!
+  timeToLiveMs: Int!
+  queryable: Boolean!
+  key: String!
+  value: String!
+}
+
+type BooleanTag implements Tag {
+  author: User!
+  timeToLiveMs: Int!
+  queryable: Boolean!
+  name: String!
+  "If true, this boolean tag has inverted meaning"
+  not: Boolean!
+}
+
+type JSONTag implements Tag {
+  author: User!
+  timeToLiveMs: Int!
+  queryable: Boolean!
+  content: JSON!
+}

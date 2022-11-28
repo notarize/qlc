@@ -1,0 +1,9 @@
+query WithDeprecatedFields {
+  operator {
+    id
+    # publicRSAKey is deprecated but has no documentation
+    publicRSAKey
+    # lastLogin is deprecated and has documentation
+    lastLogin
+  }
+}

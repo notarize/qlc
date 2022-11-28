@@ -1,0 +1,5 @@
+query GetByNodeAbstractOnly {
+  host: node(id: "host568") {
+    id
+  }
+}

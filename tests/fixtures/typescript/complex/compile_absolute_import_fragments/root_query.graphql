@@ -1,0 +1,13 @@
+#import "host/personal_host_fragment.graphql"
+#import "./user/user_fragment.graphql"
+
+query Root {
+  operator {
+    id
+    ...RelativeFragmentUser
+    personalHost {
+      id
+      ...AbsoluteFragmentHost
+    }
+  }
+}

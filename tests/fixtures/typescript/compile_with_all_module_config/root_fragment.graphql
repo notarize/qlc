@@ -1,0 +1,4 @@
+fragment RootCheck on Host {
+  id
+  numCpus
+}

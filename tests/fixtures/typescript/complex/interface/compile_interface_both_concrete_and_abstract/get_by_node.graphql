@@ -1,0 +1,24 @@
+query GetSeveralNodesWithConcreteAndAbstract {
+  someNetwork: node(id: "network653") {
+    id
+    __typename
+    ... on Network {
+      cidr
+      ipv6Cidr
+    }
+  }
+  justHiredOperator: node(id: "user9999") {
+    __typename
+    id
+    # Also see what happens when we spread second type
+    ... on Network {
+      cidr
+    }
+    ... on User {
+      id
+      email
+      firstName
+      lastName
+    }
+  }
+}

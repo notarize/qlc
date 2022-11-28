@@ -1,0 +1,7 @@
+#import "./not_here.graphql"
+
+query NonExistentFragment {
+  operator {
+    id
+  }
+}

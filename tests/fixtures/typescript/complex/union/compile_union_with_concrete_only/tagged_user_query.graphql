@@ -1,0 +1,23 @@
+query GetTagsForCurrentOperator {
+  operator {
+    email
+    tags {
+      __typename
+      ... on JSONTag {
+        content
+      }
+      ... on BooleanTag {
+        name
+      }
+      ... on KeyValueTag {
+        key
+        value
+      }
+      ... on BooleanTag {
+        name
+        not
+        notNot: not
+      }
+    }
+  }
+}

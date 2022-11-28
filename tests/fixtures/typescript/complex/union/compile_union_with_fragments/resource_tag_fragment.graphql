@@ -1,0 +1,21 @@
+fragment MyResourceTag on ResourceTag {
+  __typename
+  ... on Tag {
+    author {
+      id
+      email
+    }
+    timeToLiveMs
+  }
+  ... on BooleanTag {
+    name
+    not
+  }
+  ... on KeyValueTag {
+    timeToLiveMs
+    keyTTL: timeToLiveMs
+    key
+    anotherKeyName: key
+    value
+  }
+}

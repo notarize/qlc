@@ -1,0 +1,6 @@
+# Syntax error:
+query Unparsable {{
+  operator {
+    id
+  }
+}

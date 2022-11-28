@@ -1,0 +1,8 @@
+query CustomScalar {
+  operator {
+    id
+    activity {
+      login
+    }
+  }
+}

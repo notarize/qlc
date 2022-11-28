@@ -1,0 +1,3 @@
+mutation SimpleMutation {
+  decommissionHost(id: "hardcoded")
+}

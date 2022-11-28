@@ -1,0 +1,9 @@
+query WithSomeDunderDunderTypename {
+  operator {
+    as: __typename
+    personalHost {
+      __typename
+      id
+    }
+  }
+}

@@ -1,0 +1,7 @@
+#import "./imported_query.graphql"
+
+query MainQueryWithBadImport {
+  operator {
+    id
+  }
+}

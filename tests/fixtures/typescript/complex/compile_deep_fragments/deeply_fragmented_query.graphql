@@ -1,0 +1,16 @@
+#import "./used_deep_fragment.graphql"
+
+query DeeplyFragmented {
+  operator {
+    id
+    firstName
+    ... on User {
+      id
+      id2: id
+      ... on User {
+        id3: id
+      }
+      ...UserDeep
+    }
+  }
+}
