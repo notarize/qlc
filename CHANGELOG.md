@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.2.0](https://github.com/notarize/qlc/compare/2.1.0...2.2.0)
+
+### Features
+
+- Fields deprecated in the schema are marked with `@deprecated` JSDoc
+- "Variables" types now have sorted property names
+
+### Bugfixes
+
+- Fix an issue with root imports when `--root-dir-import-prefix` is empty string
+
 ## [2.1.0](https://github.com/notarize/qlc/compare/2.0.0...2.1.0)
 
 ### Features
