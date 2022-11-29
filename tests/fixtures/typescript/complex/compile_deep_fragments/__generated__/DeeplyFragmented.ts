@@ -1,12 +1,12 @@
 export type DeeplyFragmented_operator = {
-  firstName: string;
-  id: string;
-  id2: string;
-  id3: string;
-  idDeep: string;
-  lastName: string;
+  readonly firstName: string;
+  readonly id: string;
+  readonly id2: string;
+  readonly id3: string;
+  readonly idDeep: string;
+  readonly lastName: string;
 };
 
 export type DeeplyFragmented = {
-  operator: DeeplyFragmented_operator | null;
+  readonly operator: DeeplyFragmented_operator | null;
 };

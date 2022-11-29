@@ -1,4 +1,4 @@
 export type UserDeep = {
-  idDeep: string;
-  lastName: string;
+  readonly idDeep: string;
+  readonly lastName: string;
 };

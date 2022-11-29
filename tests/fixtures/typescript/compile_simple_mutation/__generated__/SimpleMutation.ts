@@ -1,3 +1,3 @@
 export type SimpleMutation = {
-  decommissionHost: boolean;
+  readonly decommissionHost: boolean;
 };

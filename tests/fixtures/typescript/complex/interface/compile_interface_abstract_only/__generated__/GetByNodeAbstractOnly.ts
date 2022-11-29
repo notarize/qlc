@@ -1,7 +1,7 @@
 export type GetByNodeAbstractOnly_host = {
-  id: string;
+  readonly id: string;
 };
 
 export type GetByNodeAbstractOnly = {
-  host: GetByNodeAbstractOnly_host | null;
+  readonly host: GetByNodeAbstractOnly_host | null;
 };

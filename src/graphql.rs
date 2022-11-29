@@ -32,6 +32,7 @@ pub enum BottomTypeConfig {
 pub struct CompileConfig {
     root_dir: PathBuf,
     show_deprecation_warnings: bool,
+    pub use_readonly_types: bool,
     pub bottom_type_config: BottomTypeConfig,
     pub root_dir_import_prefix: Option<String>,
     pub global_types_module_name: String,
@@ -42,6 +43,7 @@ impl From<&RuntimeConfig> for CompileConfig {
     fn from(from: &RuntimeConfig) -> Self {
         CompileConfig {
             root_dir: from.root_dir_path(),
+            use_readonly_types: !from.disable_readonly_types(),
             bottom_type_config: from.bottom_type_config(),
             show_deprecation_warnings: from.show_deprecation_warnings(),
             root_dir_import_prefix: from.root_dir_import_prefix(),

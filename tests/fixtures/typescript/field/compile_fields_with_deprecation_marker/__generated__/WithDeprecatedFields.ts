@@ -1,16 +1,16 @@
 export type WithDeprecatedFields_operator = {
-  id: string;
+  readonly id: string;
   /**
    * User's last time logging in
    * @deprecated
    */
-  lastLogin: any | null;
+  readonly lastLogin: any | null;
   /**
    * @deprecated
    */
-  publicRSAKey: string;
+  readonly publicRSAKey: string;
 };
 
 export type WithDeprecatedFields = {
-  operator: WithDeprecatedFields_operator | null;
+  readonly operator: WithDeprecatedFields_operator | null;
 };

@@ -1,3 +1,3 @@
 export type SubUser = {
-  email: string;
+  readonly email: string;
 };

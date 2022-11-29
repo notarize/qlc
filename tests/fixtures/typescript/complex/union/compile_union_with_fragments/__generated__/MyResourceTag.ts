@@ -1,43 +1,43 @@
 export type MyResourceTag_BooleanTag_author = {
-  email: string;
-  id: string;
+  readonly email: string;
+  readonly id: string;
 };
 
 export type MyResourceTag_BooleanTag = {
-  __typename: "BooleanTag";
-  author: MyResourceTag_BooleanTag_author;
-  name: string;
+  readonly __typename: "BooleanTag";
+  readonly author: MyResourceTag_BooleanTag_author;
+  readonly name: string;
   /**
    * If true, this boolean tag has inverted meaning
    */
-  not: boolean;
-  timeToLiveMs: number;
+  readonly not: boolean;
+  readonly timeToLiveMs: number;
 };
 
 export type MyResourceTag_KeyValueTag_author = {
-  email: string;
-  id: string;
+  readonly email: string;
+  readonly id: string;
 };
 
 export type MyResourceTag_KeyValueTag = {
-  __typename: "KeyValueTag";
-  anotherKeyName: string;
-  author: MyResourceTag_KeyValueTag_author;
-  key: string;
-  keyTTL: number;
-  timeToLiveMs: number;
-  value: string;
+  readonly __typename: "KeyValueTag";
+  readonly anotherKeyName: string;
+  readonly author: MyResourceTag_KeyValueTag_author;
+  readonly key: string;
+  readonly keyTTL: number;
+  readonly timeToLiveMs: number;
+  readonly value: string;
 };
 
 export type MyResourceTag_$$other_author = {
-  email: string;
-  id: string;
+  readonly email: string;
+  readonly id: string;
 };
 
 export type MyResourceTag_$$other = {
-  __typename: "JSONTag";
-  author: MyResourceTag_$$other_author;
-  timeToLiveMs: number;
+  readonly __typename: "JSONTag";
+  readonly author: MyResourceTag_$$other_author;
+  readonly timeToLiveMs: number;
 };
 
 export type MyResourceTag = MyResourceTag_BooleanTag | MyResourceTag_KeyValueTag | MyResourceTag_$$other;

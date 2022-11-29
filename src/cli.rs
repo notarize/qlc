@@ -318,6 +318,11 @@ fn arg_parse() -> ArgMatches {
                 .help("Use custom schema defined scalar names for types instead of any type"),
         )
         .arg(
+            Arg::new("disable_readonly_types")
+                .long("disable-readonly-types")
+                .help("Disable marking types as readonly"),
+        )
+        .arg(
             Arg::new("custom_scalar_prefix")
                 .takes_value(true)
                 .value_name("PREFIX")
@@ -374,6 +379,8 @@ struct ConfigFileMatches {
     schema_path: Option<PathBuf>,
     #[serde(rename(deserialize = "useCustomScalars"))]
     use_custom_scalars: Option<bool>,
+    #[serde(rename(deserialize = "disableReadonlyTypes"))]
+    disable_readonly_types: Option<bool>,
     #[serde(rename(deserialize = "customScalarPrefix"))]
     custom_scalar_prefix: Option<String>,
     #[serde(rename(deserialize = "numThreads"))]
@@ -433,6 +440,7 @@ pub struct RuntimeConfig {
     schema_path: PathBuf,
     show_deprecation_warnings: bool,
     use_custom_scalars: bool,
+    disable_readonly_types: bool,
     custom_scalar_prefix: Option<String>,
     number_threads: usize,
     root_dir_import_prefix: Option<String>,
@@ -457,6 +465,7 @@ impl RuntimeConfig {
             root_dir_import_prefix: config_root_dir_import_prefix,
             global_types_module_name: config_global_types_module_name,
             generated_module_name: config_generated_module_name,
+            disable_readonly_types: config_disable_readonly_types,
         } = match ConfigFileMatches::from_file_parse(arg_matches.value_of("config_file_path")) {
             Ok(matches) => matches,
             Err(config_error_message) => {
@@ -478,6 +487,8 @@ impl RuntimeConfig {
             || config_show_deprecation_warnings.unwrap_or(false);
         let use_custom_scalars = arg_matches.is_present("use_custom_scalars")
             || config_use_custom_scalars.unwrap_or(false);
+        let disable_readonly_types = arg_matches.is_present("disable_readonly_types")
+            || config_disable_readonly_types.unwrap_or(false);
         let custom_scalar_prefix = arg_matches
             .value_of("custom_scalar_prefix")
             .map(|s| s.to_string())
@@ -507,6 +518,7 @@ impl RuntimeConfig {
             schema_path,
             show_deprecation_warnings,
             use_custom_scalars,
+            disable_readonly_types,
             custom_scalar_prefix,
             number_threads,
             root_dir_import_prefix,
@@ -549,6 +561,10 @@ impl RuntimeConfig {
 
     pub fn generated_module_name(&self) -> String {
         self.generated_module_name.clone()
+    }
+
+    pub fn disable_readonly_types(&self) -> bool {
+        self.disable_readonly_types
     }
 }
 

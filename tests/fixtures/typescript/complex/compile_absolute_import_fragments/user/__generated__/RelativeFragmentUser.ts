@@ -1,15 +1,15 @@
 import type { OperatingSystem } from "__generated__/globalTypes";
 
 export type RelativeFragmentUser_personalHost = {
-  osFromAbsolute: OperatingSystem;
-  personalHostIdFromRelative: string;
+  readonly osFromAbsolute: OperatingSystem;
+  readonly personalHostIdFromRelative: string;
 };
 
 export type RelativeFragmentUser = {
-  email: string;
-  lastNameFromRelative: string;
+  readonly email: string;
+  readonly lastNameFromRelative: string;
   /**
    * A user's personal device
    */
-  personalHost: RelativeFragmentUser_personalHost;
+  readonly personalHost: RelativeFragmentUser_personalHost;
 };

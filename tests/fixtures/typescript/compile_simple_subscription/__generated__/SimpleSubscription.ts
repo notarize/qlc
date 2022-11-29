@@ -1,9 +1,9 @@
 export type SimpleSubscription_me = {
-  firstName: string;
-  id: string;
-  last: string;
+  readonly firstName: string;
+  readonly id: string;
+  readonly last: string;
 };
 
 export type SimpleSubscription = {
-  me: SimpleSubscription_me | null;
+  readonly me: SimpleSubscription_me | null;
 };

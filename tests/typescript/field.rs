@@ -25,8 +25,23 @@ fn compile_custom_scalar_with_prefixed_names() {
 }
 
 #[test]
+fn compile_fields_with_recursive_list_types() {
+    TestCommandHarness::default()
+        .with_fixture_directory("typescript/field/compile_fields_with_recursive_list_types")
+        .run_for_success();
+}
+
+#[test]
 fn compile_fields_with_deprecation_marker() {
     TestCommandHarness::default()
         .with_fixture_directory("typescript/field/compile_fields_with_deprecation_marker")
+        .run_for_success();
+}
+
+#[test]
+fn compile_fields_without_readonly_marker() {
+    TestCommandHarness::default()
+        .with_arg("--disable-readonly-types")
+        .with_fixture_directory("typescript/field/compile_fields_without_readonly_marker")
         .run_for_success();
 }
