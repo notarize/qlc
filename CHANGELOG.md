@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.0.0](https://github.com/notarize/qlc/compare/2.2.0...3.0.0)
+
+### Features
+
+- **Breaking**: Add support for marking types as `readonly`. Can be disabled with `--disable-readonly-types`
+- **Breaking**: Remove `tslint:disable` from output -- one can use tslintignore if still using this linter
+- **Breaking**: Add much better support for recursively higher-order types (lists of lists, etc)
+- Sort enum variants in output
+
+### Chores
+
+- **Breaking**: Update to clap v4, which parses qlc's cli args and produces help messaging
+- Upgrade other minor deps
+- Revamp integration testing, inventing QLC "test schema" and using file fixtures
+
 ## [2.2.0](https://github.com/notarize/qlc/compare/2.1.0...2.2.0)
 
 ### Features
