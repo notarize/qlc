@@ -1,5 +1,5 @@
 use crate::graphql::BottomTypeConfig;
-use clap::{crate_version, Arg, ArgMatches, Command};
+use clap::Parser;
 use colored::{control, Colorize};
 use graphql_parser::Pos;
 use serde::Deserialize;
@@ -287,89 +287,47 @@ impl ExitInformation for Vec<PrintableMessage> {
     }
 }
 
-fn arg_parse() -> ArgMatches {
-    Command::new("QL Compiler")
-        .version(crate_version!())
-        .about("\nQL Compiler (qlc) compiles type definitions from graphql and introspection JSON.")
-        .arg(
-            Arg::new("root_dir")
-                .value_name("ROOT_DIR")
-                .help("Directory to recursively compile"),
-        )
-        .arg(
-            Arg::new("config_file_path")
-                .takes_value(true)
-                .value_name("FILE_PATH")
-                .short('c')
-                .long("config-file")
-                .help("Path of JSON configuration file"),
-        )
-        .arg(
-            Arg::new("schema_path")
-                .takes_value(true)
-                .value_name("FILE_PATH")
-                .short('s')
-                .long("schema-file")
-                .help("Path of schema introspection JSON file (defaults to <ROOT_DIR>/schema.json)"),
-        )
-        .arg(
-            Arg::new("use_custom_scalars")
-                .long("use-custom-scalars")
-                .help("Use custom schema defined scalar names for types instead of any type"),
-        )
-        .arg(
-            Arg::new("disable_readonly_types")
-                .long("disable-readonly-types")
-                .help("Disable marking types as readonly"),
-        )
-        .arg(
-            Arg::new("custom_scalar_prefix")
-                .takes_value(true)
-                .value_name("PREFIX")
-                .requires("use_custom_scalars")
-                .long("custom-scalar-prefix")
-                .help("Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars"),
-        )
-        .arg(
-            Arg::new("show_deprecation_warnings")
-                .long("show-deprecation-warnings")
-                .help("Enable warnings for deprecated field usage"),
-        )
-        .arg(
-            Arg::new("root_dir_import_prefix")
-                .long("root-dir-import-prefix")
-                .value_name("PREFIX")
-                .takes_value(true)
-                .help("Sets an import prefix for the root directory, ie `@/` to get `import {..} from \"@/__generated__\"`"),
-        )
-        .arg(
-            Arg::new("global_types_module_name")
-                .long("global-types-module-name")
-                .value_name("MODULENAME")
-                .takes_value(true)
-                .help("Sets the file name used for global enums and objects, defaults to `globalTypes`"),
-        )
-        .arg(
-            Arg::new("generated_module_name")
-                .long("generated-module-name")
-                .value_name("MODULENAME")
-                .takes_value(true)
-                .help("Sets the directory name used for type definitions, defaults to `__generated__`"),
-        )
-        .arg(
-            Arg::new("nthreads")
-                .long("num-threads")
-                .value_name("NUMBER")
-                .takes_value(true)
-                .validator(|val| val.parse::<u8>().map(|_| ()).map_err(|err| err.to_string()))
-                .help("Sets the number of threads (defaults to number of CPU cores)"),
-        )
-        .arg(
-            Arg::new("no_color")
-                .long("no-color")
-                .help("Use this flag to disable colors"),
-        )
-        .get_matches()
+#[derive(Parser, Debug)]
+#[command(name = "QL Compiler", version)]
+#[command(
+    about = "QL Compiler (qlc) compiles type definitions from graphql and introspection JSON."
+)]
+struct CliArgs {
+    /// Directory to recursively compile
+    root_dir: Option<PathBuf>,
+    /// Path of JSON configuration file
+    #[arg(short, long, value_name = "FILE_PATH")]
+    config_file: Option<PathBuf>,
+    /// Path of schema introspection JSON file (defaults to <ROOT_DIR>/schema.json)
+    #[arg(short, long, value_name = "FILE_PATH")]
+    schema_path: Option<PathBuf>,
+    /// Use custom schema defined scalar names for types instead of any type
+    #[arg(long)]
+    use_custom_scalars: bool,
+    /// Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars
+    #[arg(long, value_name = "PREFIX", requires = "use_custom_scalars")]
+    custom_scalar_prefix: Option<String>,
+    /// Sets an import prefix for the root directory, ie `@/` to get `import {..} from "@/__generated__"`
+    #[arg(long, value_name = "PREFIX")]
+    root_dir_import_prefix: Option<String>,
+    /// Sets the file name used for global enums and objects, defaults to `globalTypes`
+    #[arg(long, value_name = "MODULE_NAME")]
+    global_types_module_name: Option<String>,
+    /// Sets the directory name used for type definitions, defaults to `__generated__`
+    #[arg(long, value_name = "MODULE_NAME")]
+    generated_module_name: Option<String>,
+    /// Disable marking types as readonly
+    #[arg(long)]
+    disable_readonly_types: bool,
+    /// Enables warnings for deprecated field usage
+    #[arg(long)]
+    show_deprecation_warnings: bool,
+    /// Sets the number of threads (defaults to number of CPU cores)
+    #[arg(long, value_name = "NUMBER")]
+    num_threads: Option<usize>,
+    /// Disables color output
+    #[arg(long)]
+    no_color: bool,
 }
 
 /// User configured configuration from configuration file, if it exists
@@ -384,7 +342,7 @@ struct ConfigFileMatches {
     #[serde(rename(deserialize = "customScalarPrefix"))]
     custom_scalar_prefix: Option<String>,
     #[serde(rename(deserialize = "numThreads"))]
-    nthreads: Option<usize>,
+    num_threads: Option<usize>,
     #[serde(rename(deserialize = "showDeprecationWarnings"))]
     show_deprecation_warnings: Option<bool>,
     #[serde(rename(deserialize = "rootDirImportPrefix"))]
@@ -396,9 +354,9 @@ struct ConfigFileMatches {
 }
 
 impl ConfigFileMatches {
-    fn from_file_parse(cli_file_path: Option<&str>) -> Result<Self, PrintableMessage> {
-        let config_file_was_cli_provided = cli_file_path.is_some();
-        let config_file_path = &PathBuf::from(cli_file_path.unwrap_or(".qlcrc.json"));
+    fn from_file_parse(cli_file_arg: Option<&Path>) -> Result<Self, PrintableMessage> {
+        let config_file_was_cli_provided = cli_file_arg.is_some();
+        let config_file_path = cli_file_arg.unwrap_or_else(|| Path::new(".qlcrc.json"));
         match File::open(config_file_path) {
             Ok(file) => serde_json::from_reader(BufReader::new(file))
                 .map(|mut config: Self| {
@@ -450,80 +408,52 @@ pub struct RuntimeConfig {
 
 impl RuntimeConfig {
     pub fn from_cli() -> Self {
-        let arg_matches = arg_parse();
+        let cli_args = CliArgs::parse();
 
-        if arg_matches.is_present("no_color") {
+        if cli_args.no_color {
             control::set_override(false);
         }
 
-        let ConfigFileMatches {
-            schema_path: config_schema_path,
-            use_custom_scalars: config_use_custom_scalars,
-            custom_scalar_prefix: config_custom_scalar_prefix,
-            nthreads: config_nthreads,
-            show_deprecation_warnings: config_show_deprecation_warnings,
-            root_dir_import_prefix: config_root_dir_import_prefix,
-            global_types_module_name: config_global_types_module_name,
-            generated_module_name: config_generated_module_name,
-            disable_readonly_types: config_disable_readonly_types,
-        } = match ConfigFileMatches::from_file_parse(arg_matches.value_of("config_file_path")) {
-            Ok(matches) => matches,
-            Err(config_error_message) => {
+        let config_file_args = ConfigFileMatches::from_file_parse(cli_args.config_file.as_deref())
+            .unwrap_or_else(|config_error_message| {
                 print_exit_info(vec![config_error_message]);
-            }
-        };
-
-        let root_dir = PathBuf::from(arg_matches.value_of("root_dir").unwrap_or("."));
-        let schema_path = arg_matches
-            .value_of("schema_path")
-            .map(PathBuf::from)
-            .or(config_schema_path)
-            .unwrap_or_else(|| {
-                let mut path = root_dir.clone();
-                path.push("schema.json");
-                path
             });
-        let show_deprecation_warnings = arg_matches.is_present("show_deprecation_warnings")
-            || config_show_deprecation_warnings.unwrap_or(false);
-        let use_custom_scalars = arg_matches.is_present("use_custom_scalars")
-            || config_use_custom_scalars.unwrap_or(false);
-        let disable_readonly_types = arg_matches.is_present("disable_readonly_types")
-            || config_disable_readonly_types.unwrap_or(false);
-        let custom_scalar_prefix = arg_matches
-            .value_of("custom_scalar_prefix")
-            .map(|s| s.to_string())
-            .or_else(|| config_use_custom_scalars.and(config_custom_scalar_prefix));
-        let number_threads = arg_matches
-            .value_of("nthreads")
-            .and_then(|st| st.parse().ok())
-            .or(config_nthreads)
-            .unwrap_or_else(|| std::cmp::min(num_cpus::get(), 8));
-        let root_dir_import_prefix = arg_matches
-            .value_of("root_dir_import_prefix")
-            .map(|s| s.to_string())
-            .or(config_root_dir_import_prefix);
-        let global_types_module_name = arg_matches
-            .value_of("global_types_module_name")
-            .map(|s| s.to_string())
-            .or(config_global_types_module_name)
-            .unwrap_or_else(|| String::from("globalTypes"));
-        let generated_module_name = arg_matches
-            .value_of("generated_module_name")
-            .map(|s| s.to_string())
-            .or(config_generated_module_name)
-            .unwrap_or_else(|| String::from("__generated__"));
+
+        let root_dir = cli_args.root_dir.unwrap_or_else(|| PathBuf::from("."));
+        let schema_path = cli_args
+            .schema_path
+            .or(config_file_args.schema_path)
+            .unwrap_or_else(|| root_dir.join("schema.json"));
 
         RuntimeConfig {
             root_dir,
             schema_path,
-            show_deprecation_warnings,
-            use_custom_scalars,
-            disable_readonly_types,
-            custom_scalar_prefix,
-            number_threads,
-            root_dir_import_prefix,
-            global_types_module_name,
-            generated_module_name,
+            show_deprecation_warnings: cli_args.show_deprecation_warnings
+                || config_file_args.show_deprecation_warnings.unwrap_or(false),
+            use_custom_scalars: cli_args.use_custom_scalars
+                || config_file_args.use_custom_scalars.unwrap_or(false),
+            disable_readonly_types: cli_args.disable_readonly_types
+                || config_file_args.disable_readonly_types.unwrap_or(false),
+            custom_scalar_prefix: cli_args.custom_scalar_prefix.or_else(|| {
+                config_file_args
+                    .use_custom_scalars
+                    .and(config_file_args.custom_scalar_prefix)
+            }),
+            number_threads: cli_args
+                .num_threads
+                .or(config_file_args.num_threads)
+                .unwrap_or_else(|| std::cmp::min(num_cpus::get(), 8)),
+            root_dir_import_prefix: cli_args
+                .root_dir_import_prefix
+                .or(config_file_args.root_dir_import_prefix),
+            global_types_module_name: cli_args
+                .global_types_module_name
+                .or(config_file_args.global_types_module_name)
+                .unwrap_or_else(|| String::from("globalTypes")),
+            generated_module_name: cli_args
+                .generated_module_name
+                .or(config_file_args.generated_module_name)
+                .unwrap_or_else(|| String::from("__generated__")),
         }
     }
 
