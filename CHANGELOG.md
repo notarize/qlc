@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.1.0](https://github.com/notarize/qlc/compare/3.0.0...3.1.0)
+
+### Perf
+
+- Cut a few IO read system calls
+
+### Chores
+
+- Upgrade to Rust 1.66.0
+- Upgrade dependencies
+
 ## [3.0.0](https://github.com/notarize/qlc/compare/2.2.0...3.0.0)
 
 ### Features
