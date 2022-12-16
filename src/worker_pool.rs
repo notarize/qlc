@@ -84,14 +84,17 @@ enum Work {
 
 impl Work {
     fn run_dir_entry(&self, path: &Path) -> Result<Vec<Work>, std::io::Error> {
-        let readdir = fs::read_dir(path)?;
-        let mut more_work = vec![];
-        for raw_entry in readdir {
-            let path = raw_entry?.path();
-            if path.is_dir() {
-                more_work.push(Work::DirEntry(path));
-            } else if path.is_file() && path.extension().map_or(false, |x| x == "graphql") {
-                more_work.push(Work::GraphQl(path));
+        let mut more_work = Vec::new();
+        for io_entry in fs::read_dir(path)? {
+            let entry = io_entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                more_work.push(Work::DirEntry(entry.path()));
+            } else if file_type.is_file() {
+                let path = entry.path();
+                if path.extension().map_or(false, |x| x == "graphql") {
+                    more_work.push(Work::GraphQl(path));
+                }
             }
         }
         Ok(more_work)
