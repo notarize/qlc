@@ -92,8 +92,8 @@ pub struct Variable<'a> {
     pub type_ir: VariableType<'a>,
 }
 
-pub fn try_build_variable_ir<'a, 'b, 'c>(
-    context: &'b CompileContext<'b, 'c>,
+pub fn try_build_variable_ir<'a, 'b>(
+    context: &'b CompileContext<'b, '_>,
     defs: &'a [parsed_query::VariableDefinition<'_, ParsedTextType>],
 ) -> Result<Option<Vec<Variable<'a>>>> {
     if defs.is_empty() {
@@ -112,8 +112,8 @@ pub fn try_build_variable_ir<'a, 'b, 'c>(
         .map(Some)
 }
 
-fn unwrap_var_def<'a, 'b>(
-    var_def: &'a parsed_query::VariableDefinition<'b, ParsedTextType>,
+fn unwrap_var_def<'a>(
+    var_def: &'a parsed_query::VariableDefinition<'_, ParsedTextType>,
 ) -> Result<(schema_field::FieldTypeModifier, &'a str)> {
     let (type_mod, name) = match &var_def.var_type {
         parsed_query::Type::NamedType(name) => (schema_field::FieldTypeModifier::Nullable, name),

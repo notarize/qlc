@@ -407,10 +407,10 @@ fn type_definitions_from_complex_field_collection(
     Ok(definitions)
 }
 
-fn type_definitions_from_complex_ir<'a>(
+fn type_definitions_from_complex_ir(
     config: &CompileConfig,
     global_types: &mut HashSet<String>,
-    complex_ir: &'a ir::Complex,
+    complex_ir: &'_ ir::Complex,
     prop_path: &str,
 ) -> Result<Vec<Typescript>> {
     let mut definitions = Vec::new();
@@ -457,11 +457,11 @@ fn type_definitions_from_complex_ir<'a>(
     Ok(definitions)
 }
 
-fn compile_variable_type_name<'a>(
+fn compile_variable_type_name(
     config: &CompileConfig,
     schema: &schema::Schema,
     global_types: &mut HashSet<String>,
-    var_ir: &variable::Variable<'a>,
+    var_ir: &variable::Variable<'_>,
 ) -> Result<Typescript> {
     let type_name = match var_ir.type_ir {
         variable::VariableType::Id | variable::VariableType::String => "string".to_string(),
@@ -484,11 +484,11 @@ fn compile_variable_type_name<'a>(
     Ok(type_name)
 }
 
-fn compile_variables_type_definition<'a>(
+fn compile_variables_type_definition(
     config: &CompileConfig,
     schema: &schema::Schema,
     global_types: &mut HashSet<String>,
-    op_ir: &ir::Operation<'a>,
+    op_ir: &ir::Operation<'_>,
 ) -> Result<Typescript> {
     op_ir
         .variables
@@ -503,7 +503,7 @@ fn compile_variables_type_definition<'a>(
                         prop_type_def(std::iter::empty(), &var_ir.type_modifier, type_name);
                     Ok((var_ir, type_def))
                 })
-                .collect::<Result<Vec<(&variable::Variable<'a>, String)>>>()
+                .collect::<Result<Vec<(&variable::Variable<'_>, String)>>>()
                 .map(|mut values| {
                     values.sort_unstable_by_key(|(var_ir, _type_def)| &var_ir.prop_name);
                     values

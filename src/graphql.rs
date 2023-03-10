@@ -64,9 +64,9 @@ fn read_graphql_file(path: &Path) -> Result<String, PrintableMessage> {
         .map_err(|io_error| PrintableMessage::new_compile_error_from_read_io_error(&io_error, path))
 }
 
-fn parse_graphql_file<'a, 'b>(
+fn parse_graphql_file<'a>(
     contents: &'a str,
-    file_path: &'b Path,
+    file_path: &'_ Path,
 ) -> Result<Document<'a, ParsedTextType>, PrintableMessage> {
     let parsed = graphql_parser::parse_query(contents).map_err(|parse_error| {
         // TODO parse error has no line/column information
