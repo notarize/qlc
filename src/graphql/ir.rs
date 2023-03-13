@@ -547,11 +547,11 @@ impl<'a, 'b> Operation<'a> {
     }
 }
 
-fn build_from_operation<'a, 'b>(
-    context: &CompileContext<'a, 'b>,
-    operation: &'b parsed_query::OperationDefinition<'b, ParsedTextType>,
+fn build_from_operation<'a>(
+    context: &CompileContext<'_, 'a>,
+    operation: &'a parsed_query::OperationDefinition<'a, ParsedTextType>,
     jump_state: ForeignFragmentJumpState,
-) -> ResultMany<Operation<'b>> {
+) -> ResultMany<Operation<'a>> {
     let (op_type_name, fallback_name, op_name, selection_set, var_defs, position) = match operation
     {
         parsed_query::OperationDefinition::Query(query) => (

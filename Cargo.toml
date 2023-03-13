@@ -27,4 +27,4 @@ num_cpus = "1"
 assert_cmd = "2"
 predicates = { version = "2", features = ["color-auto"] }
 assert_fs = "1"
-globwalk = "0.8.1"
+globwalk = "0.8"
