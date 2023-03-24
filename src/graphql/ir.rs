@@ -37,7 +37,7 @@ impl From<(&str, &Path, Warning)> for PrintableMessage {
                 contents,
                 &position,
                 Some(&format!(
-                    "The parent types of this spread are limited to `{}`, making spreading `{spread_type_name}` uneeded.",
+                    "The parent types of this spread are limited to `{}`, making spreading `{spread_type_name}` extraneous.",
                     possible_types.join("`, `"),
                 )),
             ),
@@ -485,11 +485,31 @@ pub struct ComplexCollection {
     pub possibilities: Vec<Complex>,
 }
 
+impl From<&str> for OperationKind {
+    fn from(name: &str) -> Self {
+        match name {
+            "Mutation" => OperationKind::Mutation,
+            "Subscription" => OperationKind::Subscription,
+            "Query" => OperationKind::Query,
+            _ => OperationKind::Fragment,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum OperationKind {
+    Query,
+    Subscription,
+    Mutation,
+    Fragment,
+}
+
 #[derive(Debug)]
 pub struct Operation<'a> {
     pub name: String,
     pub collection: ComplexCollection,
     pub variables: Option<Vec<variable::Variable<'a>>>,
+    pub kind: OperationKind,
 }
 
 impl<'a, 'b> Operation<'a> {
@@ -540,6 +560,7 @@ impl<'a, 'b> Operation<'a> {
                     name: frag_def.name.clone(),
                     collection,
                     variables: None,
+                    kind: OperationKind::Fragment,
                 }
             }
         };
@@ -593,6 +614,7 @@ fn build_from_operation<'a>(
             .unwrap_or_else(|| fallback_name.to_string()),
         collection: parent.try_into()?,
         variables: variable::try_build_variable_ir(context, var_defs).map_err(Error::Variable)?,
+        kind: OperationKind::from(op_type_name),
     })
 }
 

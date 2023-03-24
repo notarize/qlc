@@ -36,7 +36,7 @@ pub struct CompileConfig {
     pub bottom_type_config: BottomTypeConfig,
     pub root_dir_import_prefix: Option<String>,
     pub global_types_module_name: String,
-    pub generated_module_name: String,
+    pub typed_graphql_documentnode_module_name: String,
 }
 
 impl From<&RuntimeConfig> for CompileConfig {
@@ -48,7 +48,7 @@ impl From<&RuntimeConfig> for CompileConfig {
             show_deprecation_warnings: from.show_deprecation_warnings(),
             root_dir_import_prefix: from.root_dir_import_prefix(),
             global_types_module_name: from.global_types_module_name(),
-            generated_module_name: from.generated_module_name(),
+            typed_graphql_documentnode_module_name: from.typed_graphql_documentnode_module_name(),
         }
     }
 }
@@ -97,25 +97,6 @@ fn parse_graphql_file<'a>(
         return Err(message);
     }
     Ok(parsed)
-}
-
-fn makedir_p(path: &Path) -> Result<(), PrintableMessage> {
-    match std::fs::create_dir(path) {
-        Ok(_) => Ok(()),
-        Err(ref io_error) if io_error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(io_error) => Err(PrintableMessage::new_compile_error_from_write_io_error(
-            &io_error, path,
-        )),
-    }
-}
-
-fn make_generated_dir(
-    config: &CompileConfig,
-    mut path: PathBuf,
-) -> Result<PathBuf, PrintableMessage> {
-    path.push(&config.generated_module_name);
-    makedir_p(&path)?;
-    Ok(path)
 }
 
 fn get_file_path_of_fragment(
@@ -272,24 +253,14 @@ pub fn compile_file(
         }
     };
 
-    let mut parent_dir = path.to_path_buf();
-    parent_dir.pop();
-    let mut generated_dir_path = match make_generated_dir(config, parent_dir) {
-        Ok(path) => path,
-        Err(error) => {
-            messages.push(error);
-            return Err(messages);
-        }
-    };
-    generated_dir_path.push(the_compile.filename);
-    std::fs::write(&generated_dir_path, the_compile.contents).map_err(|io_error| {
+    let output_path = path.with_extension("graphql.d.ts");
+    std::fs::write(&output_path, the_compile.contents).map_err(|io_error| {
         vec![PrintableMessage::new_compile_error_from_write_io_error(
             &io_error,
-            &generated_dir_path,
+            &output_path,
         )]
     })?;
 
-    generated_dir_path.pop();
     Ok(CompileReport {
         messages,
         global_types_used: the_compile.global_types_used,
@@ -297,7 +268,7 @@ pub fn compile_file(
 }
 
 pub fn compile_global_types_file(
-    path: &Path,
+    root_path: &Path,
     config: &CompileConfig,
     schema: &Schema,
     global_names: &HashSet<String>,
@@ -305,11 +276,22 @@ pub fn compile_global_types_file(
     if global_names.is_empty() {
         return Ok(());
     }
-    let mut generated_dir_path = make_generated_dir(config, path.to_path_buf())?;
     let the_compile = typescript::compile_globals(config, schema, global_names)?;
-    generated_dir_path.push(the_compile.filename);
-    std::fs::write(&generated_dir_path, the_compile.contents).map_err(|io_error| {
-        PrintableMessage::new_compile_error_from_write_io_error(&io_error, &generated_dir_path)
+    let output_path = config
+        .root_dir_import_prefix
+        .as_deref()
+        .and_then(|root_prefix| config.global_types_module_name.strip_prefix(root_prefix))
+        .map(|global_types_module_name_without_prefix| {
+            root_path.join(global_types_module_name_without_prefix)
+        })
+        .unwrap_or_else(|| root_path.join(&config.global_types_module_name));
+    let output_path_with_ext = if output_path.extension().is_some() {
+        output_path
+    } else {
+        output_path.with_extension("ts")
+    };
+    std::fs::write(output_path_with_ext, the_compile.contents).map_err(|io_error| {
+        PrintableMessage::new_compile_error_from_write_io_error(&io_error, root_path)
     })?;
     Ok(())
 }

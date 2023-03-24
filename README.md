@@ -1,10 +1,10 @@
-👌 QL Compiler (qlc)
---------------------
+## 👌 QL Compiler (qlc)
 
-The QL compiler is a fun codegenerator for GraphQL clients. Specifically, it is capable of
-reading `.graphql` query, mutation, and fragment files and combining this with schema introspection JSON to
-produce ad-hoc type definitions for TypeScript. It is similar to the tools [Apollo Tooling CLI](https://github.com/apollographql/apollo-tooling)
-and [GraphQL Code Generator](https://github.com/dotansimha/graphql-code-generator), but smaller in scope
+The QL compiler is a fun codegenerator for GraphQL clients. Specifically, it is capable of reading
+`.graphql` query, mutation, and fragment files and combining this with schema introspection JSON to
+produce ad-hoc type definitions for TypeScript. It is similar to the tools
+[Apollo Tooling CLI](https://github.com/apollographql/apollo-tooling) and
+[GraphQL Code Generator](https://github.com/dotansimha/graphql-code-generator), but smaller in scope
 (and faster).
 
 ### Motivating Example
@@ -23,10 +23,10 @@ query CommentQuery($id: ID!) {
 }
 ```
 
-If you are using TypeScript and a GraphQL client, it would be useful to get the type of this query. You could
-write one out by hand (and then maintain this definition as the query changes). But since GraphQL supports
-introspection and has a schema, we already know the type for the above! `qlc` enables you to automate the
-codegen of the following types:
+If you are using TypeScript and a GraphQL client, it would be useful to get the type of this query.
+You could write one out by hand (and then maintain this definition as the query changes). But since
+GraphQL supports introspection and has a schema, we already know the type for the above! `qlc`
+enables you to automate the codegen of the following types:
 
 ```ts
 export type CommentQuery_comment_author = {
@@ -51,25 +51,28 @@ export type CommentQueryVariables = {
 ### Usage
 
 You can download _some_ prebuilt binaries on the
-[releases](https://github.com/notarize/qlc/releases) page. You will need to build from source with `cargo` for other platforms.
+[releases](https://github.com/notarize/qlc/releases) page. You will need to build from source with
+`cargo` for other platforms.
 
-For convenience, it is also available as an NPM package that supports x64/aarch64 MacOS and x64 linux:
+For convenience, it is also available as an NPM package that supports x64/aarch64 MacOS and x64
+linux:
 
 ```sh
 yarn add @notarize/qlc-cli
 ```
 
-`qlc` will recursively scan directories, finding `.graphql` files and produce `.ts` files in the same
-modules under a `__generated__` submodule. By default, it starts at the working directory but you can
-optionally provide it a directory argument. `qlc` supports fragment imports with the `#import "<file>.graphql"`
-syntax at the top of your files; it supports both relative imports and absolute imports starting at the
-root directory supplied to `qlc`.
+`qlc` will recursively scan directories, finding `.graphql` files and producing `.graphql.d.ts`
+files. By default, it starts at the working directory but you can optionally provide it a directory
+argument. `qlc` supports fragment imports with the `#import "<file>.graphql"` syntax at the top of
+your files; it supports both relative imports and absolute imports starting at the root directory
+supplied to `qlc`.
 
 You will need to supply `qlc` with the JSON result of _the_ introspection query. Most, if not all,
-GraphQL servers support producing this query result, and the canonical implementation can even be found
-in the official [graphql](https://www.npmjs.com/package/graphql) NPM package. See [this blog
-post](https://blog.apollographql.com/three-ways-to-represent-your-graphql-schema-a41f4175100d) for more
-information. For simplicity, the NPM package comes with a helper script that should be suitable for most users. See below.
+GraphQL servers support producing this query result, and the canonical implementation can even be
+found in the official [graphql](https://www.npmjs.com/package/graphql) NPM package. See
+[this blog post](https://blog.apollographql.com/three-ways-to-represent-your-graphql-schema-a41f4175100d)
+for more information. For simplicity, the NPM package comes with a helper script that should be
+suitable for most users. See below.
 
 #### Example
 
@@ -84,28 +87,47 @@ yarn run qlc -s my_schema.json src
 yarn run qlc --help
 ```
 
-Many of the options can also be configured through a camelcased JSON file (by default `.qlcrc.json`). For example:
+Many of the options can also be configured through a camelcased JSON file (by default
+`.qlcrc.json`). For example:
 
 ```json
 { "useCustomScalars": true, "numThreads": 2 }
 ```
 
+#### Typed Document Nodes
+
+`qlc` outputs "typed" GraphQL document nodes so that clients can auto infer result and variable
+types. Reference implementations are included in the `@notarize/qlc-cli/typed-documentnode` module.
+This requires the optional `graphql` dependency. One can choose not to use this implementation by
+overriding the `--typed-graphql-documentnode-module-name` option. For example:
+
+```sh
+yarn run qlc --typed-graphql-documentnode-module-name 'my-typenode'
+```
+
+```ts
+// In my-typenode.ts, something like:
+
+export type QueryDocumentNode<Data, Vars> = unknown;
+// more types for Mutation, Subscription, etc.
+```
+
 ### Benchmarking
 
-How much faster is "faster"? All results below are collected on MacOS, a 2.8 GHz quad-core machine with
-an NVMe storage device, with the operating system's IO cache hot. The `hyperfine` utility measured runtime.
-The directory in question has 4523 files and 534 `.graphql` files.
+How much faster is "faster"? All results below are collected on MacOS, a 2.8 GHz quad-core machine
+with an NVMe storage device, with the operating system's IO cache hot. The `hyperfine` utility
+measured runtime. The directory in question has 4523 files and 534 `.graphql` files.
 
-| Command | Version | Mean Time ± σ | NPM Dependencies |
-| ------- | ------- | ------------- | ---------------- |
-| `qlc` | 0.6.0 | 118.8 ms ± 10.8 ms | 1 (itself) |
-| `apollo client:codegen --target=typescript` | 2.31.1 (node 14.15.0) | 4.817 s ± 0.475 s | 355 |
+| Command                                     | Version               | Mean Time ± σ      | NPM Dependencies |
+| ------------------------------------------- | --------------------- | ------------------ | ---------------- |
+| `qlc`                                       | 0.6.0                 | 118.8 ms ± 10.8 ms | 1 (itself)       |
+| `apollo client:codegen --target=typescript` | 2.31.1 (node 14.15.0) | 4.817 s ± 0.475 s  | 355              |
 
 ### Development
 
-Development, compiling, testing, etc require a relatively recent version of `rustc` and `cargo`. `node` and `yarn`
-are used for some tasks, like packaging the NPM release (see `pkg/npm`), as well as creating a mock schema JSON
-for usage with `cargo test`.
+Development, compiling, testing, etc require a relatively recent version of `rustc` and `cargo`.
+`node` and `yarn` are used for some tasks, like packaging the NPM release (see `pkg/npm`), as well
+as creating a mock schema JSON for usage with `cargo test`.
 
 Here are a number of reminders for useful commands, most of which also are executed in CI:
 
@@ -139,5 +161,5 @@ KEEP_TEST_TEMPDIRS=t cargo test
 OVERWRITE_FIXTURES=t cargo test
 
 # Benchmarking on a `src` directory
-hyperfine --warmup 2 -p 'find src -name __generated__ -type d -prune ! -path src/__generated__ -exec rm -r {} +' '../qlc/target/release/qlc src'
+hyperfine --warmup 2 -p 'find src -name "*.graphql.d.ts" -type f -exec rm {} +' '../qlc/target/release/qlc src'
 ```

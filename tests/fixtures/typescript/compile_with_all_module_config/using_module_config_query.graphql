@@ -1,5 +1,5 @@
 #import "./lower/low_fragment.graphql"
-#import "~/root_fragment.graphql"
+#import "@web/root_fragment.graphql"
 
 query UsingModuleConfig {
   operator {

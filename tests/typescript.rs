@@ -43,9 +43,9 @@ fn compile_typename() {
 #[test]
 fn compile_with_all_module_config() {
     TestCommandHarness::default()
-        .with_arg("--global-types-module-name=global-types")
-        .with_arg("--root-dir-import-prefix=~/")
-        .with_arg("--generated-module-name=gen-me")
+        .with_arg("--global-types-module-name=@web/graphql_globals")
+        .with_arg("--root-dir-import-prefix=@web/")
+        .with_arg("--typed-graphql-documentnode-module-name=@web/typed_node")
         .with_fixture_directory("typescript/compile_with_all_module_config")
         .run_for_success();
 }

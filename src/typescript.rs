@@ -55,14 +55,18 @@ type Result<T> = std::result::Result<T, Error>;
 type Typescript = String;
 
 #[derive(Debug)]
+struct TypescriptVariableDefinition {
+    name: String,
+    contents: Typescript,
+}
+
+#[derive(Debug)]
 pub struct GlobalTypesCompile {
-    pub filename: String,
     pub contents: String,
 }
 
 #[derive(Debug)]
 pub struct Compile {
-    pub filename: String,
     pub contents: String,
     pub global_types_used: HashSet<String>,
 }
@@ -228,7 +232,6 @@ pub fn compile_globals(
 ) -> Result<GlobalTypesCompile> {
     let type_definitions = global_types_from_names(config, schema, global_names)?;
     Ok(GlobalTypesCompile {
-        filename: format!("{}.ts", config.global_types_module_name),
         contents: format!("{HEADER}{}", type_definitions.join("\n\n")),
     })
 }
@@ -489,7 +492,7 @@ fn compile_variables_type_definition(
     schema: &schema::Schema,
     global_types: &mut HashSet<String>,
     op_ir: &ir::Operation<'_>,
-) -> Result<Typescript> {
+) -> Result<Option<TypescriptVariableDefinition>> {
     op_ir
         .variables
         .as_ref()
@@ -522,31 +525,35 @@ fn compile_variables_type_definition(
         })
         .transpose()
         .map(|result| {
-            result
-                .map(|prop_defs| {
-                    format!(
-                        "\n\nexport type {}Variables = {{\n{}\n}};",
-                        op_ir.name, prop_defs
-                    )
-                })
-                .unwrap_or_else(|| EMPTY.to_string())
+            result.map(|prop_defs| {
+                let name = format!("{}Variables", op_ir.name);
+                let contents = format!("\n\nexport type {name} = {{\n{prop_defs}\n}};");
+                TypescriptVariableDefinition { name, contents }
+            })
         })
 }
 
-fn compile_imports(config: &CompileConfig, used_globals: &HashSet<String>) -> Typescript {
+fn compile_imports(
+    config: &CompileConfig,
+    typed_documentnode_name: &str,
+    used_globals: &HashSet<String>,
+) -> Typescript {
     if used_globals.is_empty() {
-        return String::from(EMPTY);
+        format!(
+            "import type {{ {typed_documentnode_name} }} from \"{}\";\n\n",
+            config.typed_graphql_documentnode_module_name
+        )
+    } else {
+        let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
+        // For test and file signature stability
+        sorted_names.sort_unstable();
+        format!(
+            "import type {{ {typed_documentnode_name} }} from \"{}\";\nimport type {{ {} }} from \"{}\";\n\n",
+            config.typed_graphql_documentnode_module_name,
+            sorted_names.join(", "),
+            config.global_types_module_name,
+        )
     }
-    // For test and file signature stability
-    let mut sorted_names: Vec<&str> = used_globals.iter().map(|g| g.as_ref()).collect();
-    sorted_names.sort_unstable();
-    format!(
-        "import type {{ {} }} from \"{}{}/{}\";\n\n",
-        sorted_names.join(", "),
-        config.root_dir_import_prefix.as_deref().unwrap_or(EMPTY),
-        config.generated_module_name,
-        config.global_types_module_name,
-    )
 }
 
 pub fn compile_ir(
@@ -563,12 +570,30 @@ pub fn compile_ir(
     )?;
     let variable_type_def =
         compile_variables_type_definition(config, schema, &mut global_types_used, op_ir)?;
-    let imports = compile_imports(config, &global_types_used);
+    let typed_documentnode_name = match op_ir.kind {
+        ir::OperationKind::Mutation => "MutationDocumentNode",
+        ir::OperationKind::Subscription => "SubscriptionDocumentNode",
+        ir::OperationKind::Fragment => "FragmentDocumentNode",
+        ir::OperationKind::Query => "QueryDocumentNode",
+    };
+    let imports = compile_imports(config, typed_documentnode_name, &global_types_used);
+    let variables = variable_type_def
+        .as_ref()
+        .map(|def| def.contents.as_str())
+        .unwrap_or(EMPTY);
+    let data_name = &op_ir.name;
+    let var_name = variable_type_def
+        .as_ref()
+        .map(|def| def.name.as_str())
+        .unwrap_or("never");
+    let typed_documentnode_annotation = match op_ir.kind {
+        ir::OperationKind::Fragment => format!("{typed_documentnode_name}<{data_name}>"),
+        _ => format!("{typed_documentnode_name}<{data_name}, {var_name}>"),
+    };
     Ok(Compile {
-        filename: format!("{}.ts", op_ir.name),
         contents: format!(
-            "{HEADER}{imports}{}{variable_type_def}",
-            type_definitions.join("\n\n"),
+            "{HEADER}{imports}{}{variables}\n\ndeclare const graphqlDocument: {typed_documentnode_annotation};\nexport default graphqlDocument;",
+            type_definitions.join("\n\n")
         ),
         global_types_used,
     })
