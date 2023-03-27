@@ -157,13 +157,18 @@ jobs:
             tar czf "qlc-$VERSION-$AARCH64_MAC_OSX.tar.gz" qlc
             mv "qlc-$VERSION-$AARCH64_MAC_OSX.tar.gz" "$CIRCLE_WORKING_DIRECTORY/archives/."
 
+            RELEASE_ARGS=(
+              -n "v$VERSION"
+              -c "$CIRCLE_SHA1"
+              -delete
+            )
+            if [[ $VERSION =~ "-alpha" ]] || [[ $VERSION =~ "-beta" ]]; then
+              RELEASE_ARGS+=(-prerelease)
+            fi
+
             cd "$CIRCLE_WORKING_DIRECTORY"
             ls -l archives
-            ghr \
-              -t "$GITHUB_TOKEN" \
-              -n "v$VERSION" \
-              -c "$CIRCLE_SHA1" \
-              "$VERSION" archives
+            ghr -t "$GITHUB_TOKEN" "${RELEASE_ARGS[@]}" "$VERSION" archives
 
   create_npm_release:
     executor: node_env
@@ -178,9 +183,20 @@ jobs:
           name: Publishing Package
           command: |
             VERSION=$(./target/x86_64-unknown-linux-musl/release/qlc --version | sed 's/QL Compiler //g')
+
+            RELEASE_ARGS=(
+              --new-version "$VERSION"
+              --access public
+            )
+            if [[ $VERSION =~ "-alpha" ]]; then
+              RELEASE_ARGS+=(--tag alpha)
+            elif [[ $VERSION =~ "-beta" ]]; then
+              RELEASE_ARGS+=(--tag beta)
+            fi
+
             cd pkg/npm
             sed -i "s/QLC_VERSION/$VERSION/g" package.json
-            yarn publish --new-version "$VERSION" --access public
+            yarn publish "${RELEASE_ARGS[@]}"
 
 workflows:
   version: 2
@@ -225,18 +241,24 @@ workflows:
             - fmt
           filters:
             branches:
-              only: production
+              only:
+                - production
+                - prerelease
 
       - create_github_release:
           requires:
             - build_release_bin
           filters:
             branches:
-              only: production
+              only:
+                - production
+                - prerelease
 
       - create_npm_release:
           requires:
             - create_github_release
           filters:
             branches:
-              only: production
+              only:
+                - production
+                - prerelease
