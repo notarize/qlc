@@ -31,13 +31,13 @@ fn compile_with_narrowing() {
     let mut harness = TestCommandHarness::default();
     let narrowing_query_path = harness.directory_path().join("narrow_query.graphql");
 
-    let assertion_external = contains("= help: The parent types of this spread are limited to `User`, making spreading `Host` uneeded.")
+    let assertion_external = contains("= help: The parent types of this spread are limited to `User`, making spreading `Host` extraneous.")
       .and(contains("6 |     ...SpreadOnHost\n  |        ^"))
       .and(contains_graphql_file_error_with_location(
             &narrowing_query_path,
             (6, 8),
         ));
-    let assertion_inline = contains("= help: The parent types of this spread are limited to `User`, making spreading `Network` uneeded.")
+    let assertion_inline = contains("= help: The parent types of this spread are limited to `User`, making spreading `Network` extraneous.")
       .and(contains("7 |     ... on Network {\n  |         ^"))
       .and(contains_graphql_file_error_with_location(
             &narrowing_query_path,

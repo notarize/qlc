@@ -307,15 +307,15 @@ struct CliArgs {
     /// Prefix the name of custom scalars to keep them unique, requires --use-custom-scalars
     #[arg(long, value_name = "PREFIX", requires = "use_custom_scalars")]
     custom_scalar_prefix: Option<String>,
-    /// Sets an import prefix for the root directory, ie `@/` to get `import {..} from "@/__generated__"`
+    /// Sets an import prefix for the root directory, ie `@/` to get allow `#import "@/fragment.graphql";`
     #[arg(long, value_name = "PREFIX")]
     root_dir_import_prefix: Option<String>,
-    /// Sets the file name used for global enums and objects, defaults to `globalTypes`
+    /// Sets the file name used for global enums and objects, defaults to `graphql-globals`
     #[arg(long, value_name = "MODULE_NAME")]
     global_types_module_name: Option<String>,
-    /// Sets the directory name used for type definitions, defaults to `__generated__`
+    /// Sets the module name that will be used for importing typed GraphQL document nodes, defaults to `@notarize/qlc-cli/typed-documentnode`
     #[arg(long, value_name = "MODULE_NAME")]
-    generated_module_name: Option<String>,
+    typed_graphql_documentnode_module_name: Option<String>,
     /// Disable marking types as readonly
     #[arg(long)]
     disable_readonly_types: bool,
@@ -349,8 +349,8 @@ struct ConfigFileMatches {
     root_dir_import_prefix: Option<String>,
     #[serde(rename(deserialize = "globalTypesModuleName"))]
     global_types_module_name: Option<String>,
-    #[serde(rename(deserialize = "generatedModuleName"))]
-    generated_module_name: Option<String>,
+    #[serde(rename(deserialize = "typedGraphqlDocumentnodeModuleName"))]
+    typed_graphql_documentnode_module_name: Option<String>,
 }
 
 impl ConfigFileMatches {
@@ -403,7 +403,7 @@ pub struct RuntimeConfig {
     number_threads: usize,
     root_dir_import_prefix: Option<String>,
     global_types_module_name: String,
-    generated_module_name: String,
+    typed_graphql_documentnode_module_name: String,
 }
 
 impl RuntimeConfig {
@@ -449,11 +449,11 @@ impl RuntimeConfig {
             global_types_module_name: cli_args
                 .global_types_module_name
                 .or(config_file_args.global_types_module_name)
-                .unwrap_or_else(|| String::from("globalTypes")),
-            generated_module_name: cli_args
-                .generated_module_name
-                .or(config_file_args.generated_module_name)
-                .unwrap_or_else(|| String::from("__generated__")),
+                .unwrap_or_else(|| String::from("graphql-globals")),
+            typed_graphql_documentnode_module_name: cli_args
+                .typed_graphql_documentnode_module_name
+                .or(config_file_args.typed_graphql_documentnode_module_name)
+                .unwrap_or_else(|| String::from("@notarize/qlc-cli/typed-documentnode")),
         }
     }
 
@@ -489,8 +489,8 @@ impl RuntimeConfig {
         self.global_types_module_name.clone()
     }
 
-    pub fn generated_module_name(&self) -> String {
-        self.generated_module_name.clone()
+    pub fn typed_graphql_documentnode_module_name(&self) -> String {
+        self.typed_graphql_documentnode_module_name.clone()
     }
 
     pub fn disable_readonly_types(&self) -> bool {

@@ -4,9 +4,11 @@
   "author": "Notarize Inc.",
   "license": "MIT",
   "description": "A module for using QLC in a Node project",
-  "main": "lib/index.js",
-  "engines": {
-    "node": ">= 10.0.0"
+  "types": "./lib/index.d.ts",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./typed-documentnode": "./lib/typed-documentnode.js"
   },
   "bin": {
     "qlc": "bin/qlc",
@@ -38,5 +40,8 @@
   "homepage": "https://github.com/notarize/qlc",
   "scripts": {
     "postinstall": "node ./lib/postinstall.js"
+  },
+  "optionalDependencies": {
+    "graphql": "*"
   }
 }
