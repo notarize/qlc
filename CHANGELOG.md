@@ -1,5 +1,38 @@
 # Changelog
 
+## [4.0.0](https://github.com/notarize/qlc/compare/3.1.0...4.0.0)
+
+### Features
+
+- **Breaking**: Switch to a `.graphql.d.ts` output scheme:
+  - All imports now come from `.graphql` document modules (via corresponding `.graphql.d.ts` type
+    def files)
+  - `--generated-module-name` configuration has been removed since `__generated__` modules are no
+    longer produced
+
+```ts
+// Before
+import type { MyQuery } from "./__generated__/MyQuery";
+// After
+import type { MyQuery } from "./my-query.graphql";
+```
+
+- **Breaking**: The default for `--global-types-module-name` has changed from `globalTypes` to
+  `graphql-globals`
+- **Potentially Breaking**: The default export from these modules will be a "typed documentnode"
+  with a default implementation provided in `@notarize/qlc-cli/typed-documentnode` -- one could
+  override the `--typed-graphql-documentnode-module-name` with a backwards compatible type instead
+  if this is breaking for client interfaces
+
+### Perf
+
+- Cut a few IO read system calls a result of dropping `__generated__` directories.
+
+### Chores
+
+- Upgrade to Rust 1.68.2
+- Upgrade dependencies
+
 ## [3.1.0](https://github.com/notarize/qlc/compare/3.0.0...3.1.0)
 
 ### Perf
@@ -15,8 +48,10 @@
 
 ### Features
 
-- **Breaking**: Add support for marking types as `readonly`. Can be disabled with `--disable-readonly-types`
-- **Breaking**: Remove `tslint:disable` from output -- one can use tslintignore if still using this linter
+- **Breaking**: Add support for marking types as `readonly`. Can be disabled with
+  `--disable-readonly-types`
+- **Breaking**: Remove `tslint:disable` from output -- one can use tslintignore if still using this
+  linter
 - **Breaking**: Add much better support for recursively higher-order types (lists of lists, etc)
 - Sort enum variants in output
 
@@ -42,7 +77,8 @@
 ### Features
 
 - Add support for module name and paths in CLI and JSON config
-  - `--root-dir-import-prefix` to configure a prefix on import module for build system resolve aliases
+  - `--root-dir-import-prefix` to configure a prefix on import module for build system resolve
+    aliases
   - `--global-types-module-name` to configure `globalTypes` name
   - `--generated-module-name` to configure `__generated__` name
 
@@ -55,9 +91,8 @@
 
 ### Features
 
-- **Breaking** References made to `globalTypes` are imported via type
-  only imports. This is a breaking change because a new minimum of
-  TypeScript 3.8 is required.
+- **Breaking** References made to `globalTypes` are imported via type only imports. This is a
+  breaking change because a new minimum of TypeScript 3.8 is required.
 
 ### Chores
 
@@ -94,16 +129,16 @@
 
 ### Features
 
-- Add support for a `.qlcrc.json` config file, allowing most CLI args to be passed in
-  camel-case JSON form (CLI args always have precedence) #19
-- Add option `--show-deprecation-warnings` to have QLC print warning about usage of fields
-  that are deprecated in the schema #22
+- Add support for a `.qlcrc.json` config file, allowing most CLI args to be passed in camel-case
+  JSON form (CLI args always have precedence) #19
+- Add option `--show-deprecation-warnings` to have QLC print warning about usage of fields that are
+  deprecated in the schema #22
 
 ### Chores
 
 - Upgrade dependencies and Rust to 1.55
-- Remove usage of `Mutex`/`Arc` for worker aggregates for less contention (performance in
-  some cases) and a large drop in the number of `.unwrap()` calls
+- Remove usage of `Mutex`/`Arc` for worker aggregates for less contention (performance in some
+  cases) and a large drop in the number of `.unwrap()` calls
 - Upgrade github release client used during CI (0.12.2 -> 0.14.0)
 
 ## [0.8.0](https://github.com/notarize/qlc/compare/0.7.0...0.8.0)
