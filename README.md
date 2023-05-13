@@ -1,4 +1,4 @@
-## 👌 QL Compiler (qlc)
+## 👌 QL Compiler (qlc) - this is only a test.
 
 The QL compiler is a fun codegenerator for GraphQL clients. Specifically, it is capable of reading
 `.graphql` query, mutation, and fragment files and combining this with schema introspection JSON to
