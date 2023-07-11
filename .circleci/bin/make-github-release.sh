@@ -10,9 +10,10 @@ mkdir -p "$ARCHIVES_DIR"
 for PLATFORM in "${RELEASE_PLATFORMS[@]}"
 do
   cd "$CIRCLE_WORKING_DIRECTORY/target/$PLATFORM/release"
-  tar czf "qlc-$QLC_VERSION-$PLATFORM.tar.gz" qlc
-  mv "qlc-$QLC_VERSION-$PLATFORM.tar.gz" "$ARCHIVES_DIR"
+  tar czf "$ARCHIVES_DIR/qlc-$QLC_VERSION-$PLATFORM.tar.gz" qlc
 done
+
+sha256sum "$ARCHIVES_DIR"/* | tee "$ARCHIVES_DIR/checksums.txt"
 
 echo "*** Making release out of $ARCHIVES_DIR ***"
 ls -l "$ARCHIVES_DIR"

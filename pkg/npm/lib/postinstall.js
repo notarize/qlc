@@ -6,14 +6,19 @@ const url = require("url");
 const https = require("https");
 const path = require("path");
 const util = require("util");
+const crypto = require("crypto");
 const childProc = require("child_process");
 
 const fsChmod = util.promisify(fs.chmod);
 const fsUnlink = util.promisify(fs.unlink);
 const fsExists = util.promisify(fs.exists);
+const fsReadFile = util.promisify(fs.readFile);
 const mkdir = util.promisify(fs.mkdir);
 
-const VERSION = require("../package.json").version;
+const {
+  version: VERSION,
+  checksumConfig: CHECKSUMS,
+} = require("../package.json");
 const BIN_PATH = path.join(__dirname, "../bin");
 
 function getTarget() {
@@ -77,8 +82,26 @@ function untar(zipPath, destDir) {
   });
 }
 
+async function checksum(tarballPath, target) {
+  const expected = CHECKSUMS[target];
+  if (!expected) {
+    throw new Error(`Missing checksum for ${target}`);
+  }
+  const actual = crypto
+    .createHash("sha256")
+    .update(await fsReadFile(tarballPath))
+    .digest("hex");
+  if (expected !== actual) {
+    throw new Error(
+      `Checksum integrity check failed: expected ${expected}, got ${actual}`
+    );
+  }
+  return actual;
+}
+
 async function main() {
-  const fileName = `qlc-${VERSION}-${getTarget()}.tar.gz`;
+  const target = getTarget();
+  const fileName = `qlc-${VERSION}-${target}.tar.gz`;
   const url = `https://github.com/notarize/qlc/releases/download/${VERSION}/${fileName}`;
   await Promise.all([
     fsExists(BIN_PATH).then((exists) => {
@@ -86,6 +109,12 @@ async function main() {
     }),
     download(url, fileName),
   ]);
+  try {
+    await checksum(fileName, target);
+  } catch (error) {
+    await fsUnlink(fileName);
+    throw error;
+  }
   await untar(fileName, BIN_PATH);
   await Promise.all([
     fsUnlink(fileName),

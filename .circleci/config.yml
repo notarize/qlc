@@ -126,6 +126,10 @@ jobs:
       - run:
           name: Making GitHub release
           command: ./.circleci/bin/make-github-release.sh
+      - persist_to_workspace:
+          root: /root/notarize
+          paths:
+            - qlc/archives/checksums.txt
 
   create_npm_release:
     executor: node_env
