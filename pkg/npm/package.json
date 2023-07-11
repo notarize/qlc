@@ -1,6 +1,6 @@
 {
   "name": "@notarize/qlc-cli",
-  "version": "QLC_VERSION",
+  "version": "@QLC_VERSION@",
   "author": "Notarize Inc.",
   "license": "MIT",
   "description": "A module for using QLC in a Node project",
