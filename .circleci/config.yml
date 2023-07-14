@@ -116,6 +116,7 @@ jobs:
             - qlc/target/x86_64-apple-darwin/release
             - qlc/target/aarch64-apple-darwin/release
             - qlc/target/x86_64-unknown-linux-musl/release
+            - qlc/target/aarch64-unknown-linux-musl/release
 
   create_github_release:
     executor: github_api_client

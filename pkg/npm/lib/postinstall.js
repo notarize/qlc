@@ -30,6 +30,8 @@ function getTarget() {
       return "aarch64-apple-darwin";
     case "linux-x64":
       return "x86_64-unknown-linux-musl";
+    case "linux-arm64":
+      return "aarch64-unknown-linux-musl";
     default:
       throw new Error(`Unsupported platform: ${id}`);
   }
