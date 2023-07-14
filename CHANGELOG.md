@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.1.0](https://github.com/notarize/qlc/compare/4.0.0...4.1.0)
+
+### Features
+
+- The NPM package now downloads tarballs from GitHub with sha256 checksums
+- Added a `aarch64-unknown-linux-musl` binary release
+
+### Chores
+
+- Upgrade to Rust 1.71.0
+- Upgrade dependencies
+
 ## [4.0.0](https://github.com/notarize/qlc/compare/3.1.0...4.0.0)
 
 ### Features
