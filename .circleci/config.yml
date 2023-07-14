@@ -10,18 +10,16 @@ commands:
 executors:
   default_rust_compiler:
     docker:
-      - image: rust:1.68.2-slim-bullseye
+      - image: rust:1.71.0-bookworm
     working_directory: /root/notarize/qlc
     environment:
-      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
       CARGO_HOME: /root/notarize/qlc/.cargo
 
   cross_compiling_host:
     docker:
-      - image: notarize/cross-rust:1.68.2-bullseye
+      - image: notarize/cross-rust:1.71.0-bookworm
     working_directory: /root/notarize/qlc
     environment:
-      CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
       CARGO_HOME: /root/notarize/qlc/.cargo
 
   github_api_client:
