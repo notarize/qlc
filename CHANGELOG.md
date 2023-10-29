@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.2.0](https://github.com/notarize/qlc/compare/4.1.0...4.2.0)
+
+### Bugfixes
+
+- Cleanly exit from NPM post-install script
+
+### Chores
+
+- Upgrade to Rust 1.73.0
+- Upgrade dependencies (including security fix)
+
 ## [4.1.0](https://github.com/notarize/qlc/compare/4.0.0...4.1.0)
 
 ### Features
