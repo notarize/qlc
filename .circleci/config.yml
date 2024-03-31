@@ -1,117 +1,100 @@
 version: 2.1
 
-commands:
-  attach_made_workspace:
-    description: Attach workspace generated files from another job
-    steps:
-      - attach_workspace:
-          at: /root/notarize
+in_nix_shell: &in_nix_shell
+  shell: /usr/bin/env nix develop --command bash -eo pipefail
 
+commands:
+  configure_nix:
+    description: Configure nix for use in workflows
+    steps:
+      - run:
+          name: Editing nix.conf
+          command: |
+            echo 'experimental-features = nix-command flakes' >> /etc/nix/nix.conf
+            echo 'cores = 4' >> /etc/nix/nix.conf
+        
 executors:
-  default_rust_compiler:
+  default_nix_devenv:
     docker:
-      - image: rust:1.73.0-bookworm
-    working_directory: /root/notarize/qlc
+      - image: nixos/nix:2.21.1
+    working_directory: /opt/qlc
     environment:
-      CARGO_HOME: /root/notarize/qlc/.cargo
+      CARGO_HOME: /opt/qlc/.cargo
 
   cross_compiling_host:
     docker:
       - image: notarize/cross-rust:1.73.0-bookworm
-    working_directory: /root/notarize/qlc
+    working_directory: /opt/qlc
     environment:
-      CARGO_HOME: /root/notarize/qlc/.cargo
+      CARGO_HOME: /opt/qlc/.cargo
 
   github_api_client:
     docker:
       - image: notarize/github-api-client:ghr-0.16.0
-    working_directory: /root/notarize/qlc
+    working_directory: /opt/qlc
 
   node_env:
     docker:
       - image: cimg/node:18.16.1
         user: root
-    working_directory: /root/notarize/qlc
+    working_directory: /opt/qlc
 
 jobs:
-  test_schema_init:
-    executor: node_env
+  static_analysis:
+    executor: default_nix_devenv
     steps:
       - checkout
+      - configure_nix
       - run:
-          name: Building schema
-          command: |
-            cd tests/fixtures/schema_generation
-            yarn install --frozen-lockfile
-            yarn run build
-      - persist_to_workspace:
-          root: /root/notarize
-          paths:
-            - qlc/tests/fixtures/schema_generation/output
-
-  cargo_init:
-    executor: default_rust_compiler
-    steps:
-      - checkout
+          name: Priming nix shell
+          command: nix build -L --no-link --print-out-paths .#devShells.x86_64-linux.default
       - restore_cache:
           keys:
-            - cargo-cache-v2-{{ checksum "Cargo.lock" }}
-            - cargo-cache-v2-
+            - cargo-cache-v3-{{ checksum "Cargo.lock" }}
+            - cargo-cache-v3-
       - run:
-          name: Building
-          command: cargo build --all-targets --all-features
+          name: Linting
+          command: just lint
+          <<: *in_nix_shell
+      - run:
+          name: Formatting
+          command: |
+            cargo fmt --all -- --check
+            nix fmt -- --check .
+          when: always
+          <<: *in_nix_shell
+      - run:
+          name: Testing
+          command: |
+            just build-test-schema
+            just test -- --test-threads=7
+          when: always
+          <<: *in_nix_shell
       - save_cache:
+          key: cargo-cache-v3-{{ checksum "Cargo.lock" }}
           paths:
             - /usr/local/cargo/registry
             - target/debug/.fingerprint
             - target/debug/build
             - target/debug/deps
+            - target/release/.fingerprint
+            - target/release/build
+            - target/release/deps
             - .cargo
-          key: cargo-cache-v2-{{ checksum "Cargo.lock" }}
       - persist_to_workspace:
-          root: /root/notarize
+          root: /opt
           paths:
             - qlc
-
-  fmt:
-    executor: default_rust_compiler
-    steps:
-      - attach_made_workspace
-      - run:
-          name: Getting rustfmt
-          command: rustup component add rustfmt
-      - run:
-          name: Checking formating
-          command: cargo fmt --all -- --check
-
-  lint:
-    executor: default_rust_compiler
-    steps:
-      - attach_made_workspace
-      - run:
-          name: Getting clippy
-          command: rustup component add clippy
-      - run:
-          name: Linting
-          command: cargo clippy --all-targets --all-features -- -D warnings
-
-  test:
-    executor: default_rust_compiler
-    steps:
-      - attach_made_workspace
-      - run:
-          name: Testing
-          command: cargo test -- --test-threads=7
 
   build_release_bin:
     executor: cross_compiling_host
     steps:
-      - attach_made_workspace
+      - attach_workspace: { at: /opt }
       - run:
           name: Building all release targets
           command: ./.circleci/bin/build-release-binary.sh
       - persist_to_workspace:
-          root: /root/notarize
+          root: /opt
           paths:
             - qlc/target/x86_64-apple-darwin/release
             - qlc/target/aarch64-apple-darwin/release
@@ -121,19 +104,19 @@ jobs:
   create_github_release:
     executor: github_api_client
     steps:
-      - attach_made_workspace
+      - attach_workspace: { at: /opt }
       - run:
           name: Making GitHub release
           command: ./.circleci/bin/make-github-release.sh
       - persist_to_workspace:
-          root: /root/notarize
+          root: /opt
           paths:
             - qlc/archives/checksums.txt
 
   create_npm_release:
     executor: node_env
     steps:
-      - attach_made_workspace
+      - attach_workspace: { at: /opt }
       - run:
           name: Configuring NPM token
           command: |
@@ -147,43 +130,11 @@ workflows:
   version: 2
   Everything:
     jobs:
-      - cargo_init:
-          filters:
-            branches:
-              ignore: main
-
-      - test_schema_init:
-          filters:
-            branches:
-              ignore: main
-
-      - test:
-          requires:
-            - cargo_init
-            - test_schema_init
-          filters:
-            branches:
-              ignore: main
-
-      - lint:
-          requires:
-            - cargo_init
-          filters:
-            branches:
-              ignore: main
-
-      - fmt:
-          requires:
-            - cargo_init
-          filters:
-            branches:
-              ignore: main
+      - static_analysis
 
       - build_release_bin:
           requires:
-            - test
-            - lint
-            - fmt
+            - static_analysis
           filters:
             branches:
               only:

@@ -125,41 +125,40 @@ measured runtime. The directory in question has 4523 files and 534 `.graphql` fi
 
 ### Development
 
-Development, compiling, testing, etc require a relatively recent version of `rustc` and `cargo`.
-`node` and `yarn` are used for some tasks, like packaging the NPM release (see `pkg/npm`), as well
-as creating a mock schema JSON for usage with `cargo test`.
+To develop qlc, one needs a working `cargo`, `rustc`, `node`, and `yarn` installation. The repository
+provides this via a Nix shell (`shell.nix`) for ease. `node` and `yarn` are used for some tasks, like
+packaging the NPM release (see `pkg/npm`), as well as creating a mock schema JSON for testing.
 
 Here are a number of reminders for useful commands, most of which also are executed in CI:
 
-```sh
-# Formatting
-cargo fmt --all
+```shell
+# If using the nix shell, the `just` command runner can be utilized to list recipes
+just
 
-# Linting
-cargo clippy --all-targets --all-features -- -D warnings
+# Static tools
+just lint
+just format
+
+# Benchmarking on a `src` directory (using hyperfine)
+hyperfine --warmup 2 -p 'find src -name "*.graphql.d.ts" -type f -exec rm {} +' '../qlc/target/release/qlc src'
 
 # Testing
-## Test Setup, turning tests/fixtures/schema_generation/schema.graphl into a
-## usable tests/fixtures/schema_generation/output/schema.json
-yarn --cwd tests/fixtures/schema_generation install --frozen-lockfile
-yarn --cwd tests/fixtures/schema_generation run build
+## Test Setup
+just build-test-schema
 
 ## Run all tests
-cargo test
+just test
 
 ## Run matching test
-cargo test union_with_typename
+just test union_with_typename
 
 ## Instruct cargo test not to capture stdout/stderr so that one can see `dbg!()` output, etc.
-cargo test -- --nocapture
+just test -- --nocapture
 
 ## Instruct the test harness not to delete temporary directories created during testing for debugging
-KEEP_TEST_TEMPDIRS=t cargo test
+KEEP_TEST_TEMPDIRS=t just test
 
 ## Instruct the test harness overwrite expected fixtures with actual output -- useful for large swath compiler output changes
 ## Warning: will change repo files on disk
-OVERWRITE_FIXTURES=t cargo test
-
-# Benchmarking on a `src` directory
-hyperfine --warmup 2 -p 'find src -name "*.graphql.d.ts" -type f -exec rm {} +' '../qlc/target/release/qlc src'
+OVERWRITE_FIXTURES=t just test
 ```
