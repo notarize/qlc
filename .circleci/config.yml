@@ -26,13 +26,6 @@ executors:
     environment:
       CARGO_HOME: /opt/qlc/.cargo
 
-  cross_compiling_host:
-    docker:
-      - image: notarize/cross-rust:1.73.0-bookworm
-    working_directory: /opt/qlc
-    environment:
-      CARGO_HOME: /opt/qlc/.cargo
-
   github_api_client:
     docker:
       - image: notarize/github-api-client:ghr-0.16.0
@@ -94,19 +87,22 @@ jobs:
             - qlc
 
   build_release_bin:
-    executor: cross_compiling_host
+    executor: default_nix_devenv
     steps:
       - attach_workspace: { at: /opt }
       - run:
           name: Building all release targets
-          command: ./.circleci/bin/build-release-binary.sh
+          command: |
+            nix build --print-build-logs --print-out-paths \
+              --out-link target/nix/result \
+              .#qlc-x86_64-linux .#qlc-aarch64-linux \
+              .#qlc-x86_64-darwin .#qlc-aarch64-darwin
+
+            ls -la target/nix
       - persist_to_workspace:
           root: /opt
           paths:
-            - qlc/target/x86_64-apple-darwin/release
-            - qlc/target/aarch64-apple-darwin/release
-            - qlc/target/x86_64-unknown-linux-musl/release
-            - qlc/target/aarch64-unknown-linux-musl/release
+            - qlc/target/nix
 
   create_github_release:
     executor: github_api_client
