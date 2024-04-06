@@ -6,12 +6,17 @@ in_nix_shell: &in_nix_shell
 commands:
   configure_nix:
     description: Configure nix for use in workflows
+    parameters:
+      core_count:
+        type: integer
+        # Default medium instance has 2 cores
+        default: 2
     steps:
       - run:
           name: Editing nix.conf
           command: |
             echo 'experimental-features = nix-command flakes' >> /etc/nix/nix.conf
-            echo 'cores = 4' >> /etc/nix/nix.conf
+            echo 'cores = << parameters.core_count >>' >> /etc/nix/nix.conf
         
 executors:
   default_nix_devenv:
@@ -31,12 +36,14 @@ executors:
   github_api_client:
     docker:
       - image: notarize/github-api-client:ghr-0.16.0
+    resource_class: small
     working_directory: /opt/qlc
 
   node_env:
     docker:
-      - image: cimg/node:18.16.1
+      - image: cimg/node:20.12.1
         user: root
+    resource_class: small
     working_directory: /opt/qlc
 
 jobs:
@@ -47,7 +54,7 @@ jobs:
       - configure_nix
       - run:
           name: Priming nix shell
-          command: nix build -L --no-link --print-out-paths .#devShells.x86_64-linux.default
+          command: nix build --print-build-logs --no-link --print-out-paths .#devShells.x86_64-linux.default
       - restore_cache:
           keys:
             - cargo-cache-v3-{{ checksum "Cargo.lock" }}
@@ -67,7 +74,7 @@ jobs:
           name: Testing
           command: |
             just build-test-schema
-            just test -- --test-threads=7
+            just test -- --test-threads=4
           when: always
           <<: *in_nix_shell
       - save_cache:

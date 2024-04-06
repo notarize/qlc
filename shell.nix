@@ -3,6 +3,7 @@
 , clippy
 , rustfmt
 , just
+, yarn
 , writeText
 , runCommand
 , makeBinaryWrapper
@@ -45,6 +46,7 @@ mkShell {
   name = "qlc-devshell";
   inputsFrom = [ qlc ];
   packages = [
+    yarn
     clippy
     rustfmt
     justWithConfig
